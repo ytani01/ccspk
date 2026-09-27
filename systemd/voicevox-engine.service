@@ -1,0 +1,11 @@
+[Unit]
+Description=VOICEVOX engine（Claude の返答の読み上げ用）
+
+[Service]
+# 公式リリースの Linux 単体版（voicevox_engine-linux-cpu-x64-*.vvpp）を展開した場所
+WorkingDirectory=%h/.local/share/voicevox-engine/0.25.2
+ExecStart=%h/.local/share/voicevox-engine/0.25.2/run --host 127.0.0.1 --port 50021
+Restart=on-failure
+
+[Install]
+WantedBy=default.target
