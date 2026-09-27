@@ -52,7 +52,14 @@ def to_speech(text):
     text = re.sub(r"^\s*#+\s*", "", text, flags=re.M)
     text = re.sub(r"^\s*(?:[-*+]|\d+\.)\s+", "", text, flags=re.M)
     text = text.replace("_", " ")
+    # エンジンが読まない記号（1〜4 → イチ、ヨン）。半角の「~」は取り消し線や ~/ にも
+    # 出て下で消すので、数字に挟まれたときだけ。前後のスペースは「から」の後に間が入るので消す
+    text = re.sub(r"(?<=[0-9０-９])[ \t]*~[ \t]*(?=[0-9０-９])", "から", text)
     text = re.sub(r"[`*~>]", "", text)
+    text = re.sub(r"[ \t]*[〜～→][ \t]*", "から", text)
+    # 数字と単位の間のスペースで区切って読む（180 字 → ヒャクハチジュウ、ジ）ので、
+    # 同じ行で日本語が続くときだけ消す。英語が続くとき（3 files）は 1 語と読まれないよう残す
+    text = re.sub(r"(?<=[0-9０-９])[ \t]+(?=[\u3041-\u30ff\u4e00-\u9fff])", "", text)
     text = re.sub(r"\s+", " ", text).strip()
     return clip(text)
 
@@ -200,6 +207,15 @@ def demo():
     assert to_speech("CLAUDE_TTS_SPEAK を足す") == "CLAUDE TTS SPEAK を足す"
     assert to_speech("説明\n```python\nsecret()\n") == "説明 コード省略。"
     assert to_speech("前\n~~~\ncode\n~~~\n後") == "前 コード省略。 後"
+    # 記号の置き換えと、数字の直後のスペース
+    assert to_speech("1〜4 秒、12～14 行目") == "1から4秒、12から14行目"
+    assert to_speech("2 行 → 1 行、1 〜 4") == "2行から1行、1から4"
+    assert to_speech("1~4 秒、2 ~ 3、~/a、a~b") == "1から4秒、2から3、/a、ab"
+    assert to_speech("~100 件、1 ~/a") == "100件、1 /a"  # 数字が片側だけなら置き換えない
+    assert to_speech("180 字、2 つ、TODO-013 の件") == "180字、2つ、TODO-013の件"
+    assert to_speech("3 files と 1 ファイル、v1 A") == "3 files と 1ファイル、v1 A"
+    assert to_speech("x 1  字、**2** 行、１８０ 字") == "x 1字、2行、１８０字"
+    assert to_speech("手順 1\n次へ") == "手順 1 次へ"  # 行をまたぐときはつなげない
     assert sentences("直した。確かめる？ はい! 終わり") == ["直した。", "確かめる？", "はい!", "終わり"]
     assert sentences("句点なし") == ["句点なし"]
     assert sentences("") == []

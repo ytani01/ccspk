@@ -1,0 +1,59 @@
+TODO
+TODO.md
+TODO-013 を直す
+CLAUDE.md
+README
+README.md
+HUD
+PAM
+TTS
+PID
+GUI
+PC
+GIF
+AUR
+URL
+UID
+JSON
+MCP
+CLI
+API
+OK
+GB
+VOICEVOX
+LICENSE
+settings.json
+config.js
+init.el
+token-usage.py
+index.md
+demo.png
+fcitx5
+p10k
+v0.25.2
+v1
+/clear を勧める
+archives/todo/ に置く
+1〜4 秒
+12〜14 行目
+6×10
+30 秒 × 3 回
+2 行 → 1 行
+a / b
+50%
+1 + 2
+180 字
+2 つ
+5 分
+3 files
+push
+commit
+reviewer
+verifier
+claude
+hooks
+git
+diff
+Opus
+Sonnet
+Haiku
