@@ -22,6 +22,12 @@ LIMIT = 180  # 合成に時間がかかるので、読み上げるのはここ�
 SPEAKER = 119  # 夜語トバリ（明るい）
 ENGINE = "http://127.0.0.1:50021"
 PLAY = "--play"  # 合成と再生を受け持つ子プロセスの目印
+# 1 文目を短く切る区切り。読点・閉じ括弧・コロンの後ろ、開き括弧の前。
+# 半角の「,」は 1,000、「:」は 12:30、「(」は name() のように語の中にも出るので、
+# 「,」は入れず、「:」は英数字が続くとき、「(」は英数字の直後のときは切らない
+CUT = r"[、，：）」』】)]|:(?![0-9A-Za-z])|(?=[（「『【])|(?<![0-9A-Za-z])(?=\()"
+CUT_MIN = 8  # これより手前では切らない（「（」だけのような短すぎる塊を作らない）
+SPACE_WITHIN = 30  # この字数までに CUT が無いときだけスペースで切る
 PIDFILE = (
     Path(os.environ["XDG_RUNTIME_DIR"]) / "claude-tts.pid"
     if os.environ.get("XDG_RUNTIME_DIR")
@@ -65,6 +71,33 @@ def sentences(text):
     return [s for s in re.split(r"(?<=[。！？!?])\s*", text) if s]
 
 
+def split_first(sentence):
+    """1 文目を、最初の音を早めるために前後 2 つに切る。切れなければそのまま。
+
+    スペースは日本語の返答では英語や識別子の前後に出て、語と助詞の間で切れて
+    しまうので、ほかの区切りが SPACE_WITHIN 字までに無いときだけ使う。
+    後半が句点や空白だけになる所（「…（続き）。」の閉じ括弧の後ろなど）では切らない。
+    """
+
+    def ok(i):
+        return i >= CUT_MIN and re.search(r"[^\s。！？!?]", sentence[i:])
+
+    cuts = [m.end() for m in re.finditer(CUT, sentence) if ok(m.end())]
+    first = cuts[0] if cuts else len(sentence)
+    space = next((i for i in range(CUT_MIN, first) if sentence[i] == " " and ok(i + 1)), None)
+    if cuts and (first <= SPACE_WITHIN or space is None):
+        return [sentence[:first], sentence[first:]]
+    if space is not None:
+        return [sentence[:space], sentence[space + 1 :]]
+    return [sentence]
+
+
+def chunks(text):
+    """合成する単位。1 文目だけ split_first で切り、2 文目以降は文ごと。"""
+    ss = sentences(text)
+    return split_first(ss[0]) + ss[1:] if ss else []
+
+
 def synthesize(sentence):
     """1 文を合成して wav のバイト列を返す。"""
     query = urllib.request.urlopen(
@@ -94,7 +127,7 @@ def play(text):
         # エンジンが動いていない、応答が途中で切れた、など何で止まっても、
         # 鳴らす側が待ち続けないよう終わりの印は必ず入れる
         try:
-            for s in sentences(text):
+            for s in chunks(text):
                 wavs.put(synthesize(s))
         finally:
             wavs.put(None)
@@ -137,6 +170,45 @@ def demo():
     assert sentences("直した。確かめる？ はい! 終わり") == ["直した。", "確かめる？", "はい!", "終わり"]
     assert sentences("句点なし") == ["句点なし"]
     assert sentences("") == []
+    # 1 文目の切り方
+    assert split_first("reviewer の指摘を受けて挙動が変わったので、同じ reviewer に見てもらう。") == [
+        "reviewer の指摘を受けて挙動が変わったので、", "同じ reviewer に見てもらう。"]
+    assert split_first("はい、分かりました。") == ["はい、分かりました。"]  # 8 字より手前では切らない
+    assert split_first("設定を見直しました（TODO-008 の続き）。") == ["設定を見直しました", "（TODO-008 の続き）。"]
+    assert split_first("settings.json の登録は通りました。") == ["settings.json", "の登録は通りました。"]
+    s = "あいうえおかきくけこ さしすせそたちつてとなにぬねのはひふへほまみむめも、やゆよ。"
+    assert split_first(s) == ["あいうえおかきくけこ", "さしすせそたちつてとなにぬねのはひふへほまみむめも、やゆよ。"]
+    s = "あいうえおかきくけこさしすせそたちつてとなにぬねのはひふへほまみむめも、やゆよ。"
+    assert split_first(s) == ["あいうえおかきくけこさしすせそたちつてとなにぬねのはひふへほまみむめも、", "やゆよ。"]
+    assert split_first("直した。") == ["直した。"]
+    a = "あ"
+    # 8 字の境界: ちょうど 8 字目の後ろなら切る。7 字目なら切らない
+    assert split_first(a * 7 + "、いう。") == [a * 7 + "、", "いう。"]
+    assert split_first(a * 6 + "、いう。") == [a * 6 + "、いう。"]
+    assert split_first(a * 8 + " いう。") == [a * 8, "いう。"]
+    assert split_first(a * 7 + " いう。") == [a * 7 + " いう。"]
+    # 30 字の境界: 区切りが 30 字目までならそこ、31 字目ならその手前のスペース
+    assert split_first(a * 10 + " " + a * 18 + "、いう。") == [a * 10 + " " + a * 18 + "、", "いう。"]
+    assert split_first(a * 10 + " " + a * 19 + "、いう。") == [a * 10, a * 19 + "、いう。"]
+    # スペースは最初の区切りより後ろのものを使わない
+    assert split_first(a * 35 + "、いいいいい うえ。") == [a * 35 + "、", "いいいいい うえ。"]
+    # 後半が句点や空白だけになる所では切らない
+    assert split_first(a * 10 + "、") == [a * 10 + "、"]
+    assert split_first("直した内容は「対応しない」。") == ["直した内容は「対応しない」。"]
+    # 区切りの文字ごと
+    for d in "、，：）」』】)":
+        assert split_first(a * 9 + d + "いう。") == [a * 9 + d, "いう。"], d
+    for d in "（「『【(":
+        assert split_first(a * 9 + d + "いう）。") == [a * 9, d + "いう）。"], d
+    assert split_first(a * 9 + ":いう。") == [a * 9 + ":", "いう。"]
+    # 語の中の半角「:」「(」では切らない
+    assert split_first("明日の会議は 12:30 からです。") == ["明日の会議は 12:30", "からです。"]
+    assert split_first(a * 9 + "hasCell() を足した。")[0] == a * 9 + "hasCell()"
+    assert chunks("直しました、確かめてください。次です。") == ["直しました、確かめてください。", "次です。"]
+    # 切るのは 1 文目だけ
+    assert chunks("見直しが終わったので、確かめてください。二つ目の文ですが、ここは切らない。") == [
+        "見直しが終わったので、", "確かめてください。", "二つ目の文ですが、ここは切らない。"]
+    assert chunks("") == []
     print("ok")
 
 
