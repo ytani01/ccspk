@@ -1,5 +1,103 @@
 # 使い方
 
+## 入れ方
+
+リポジトリは `~/work/claudecodespeak` に clone する（フックの設定と下の手順の
+コマンドは、このパスを前提にしている）。
+
+```sh
+git clone git@github.com:ytani01/claudecodespeak.git ~/work/claudecodespeak
+```
+
+### エンジン
+
+エンジンは公式リリースの Linux 単体版を使う（約 1.8 GB、展開後 2.2 GB）。
+夜語トバリは 0.25.2 からなので、AUR の `voicevox-engine`（0.24.1）では鳴らない。
+`.vvpp` の中身は zip で、`7z` で展開できる。
+
+```sh
+mkdir -p ~/.local/share/voicevox-engine && cd ~/.local/share/voicevox-engine
+gh release download 0.25.2 -R VOICEVOX/voicevox_engine \
+  -p 'voicevox_engine-linux-cpu-x64-0.25.2.vvpp'
+7z x -o0.25.2 voicevox_engine-linux-cpu-x64-0.25.2.vvpp
+chmod +x 0.25.2/run
+rm voicevox_engine-linux-cpu-x64-0.25.2.vvpp
+systemctl --user link ~/work/claudecodespeak/systemd/voicevox-engine.service
+systemctl --user enable --now voicevox-engine.service
+curl -s http://127.0.0.1:50021/version   # "0.25.2" が返れば起動している
+```
+
+再生には `pw-play`（PipeWire）を使う。版を上げるときは、展開先と
+unit ファイルのパスを揃えて書き換え、`systemctl --user daemon-reload` してから
+再起動する。
+
+エンジンを入れたら、読み間違える語の辞書を読み込む
+（[戻す](#戻す) の手順）。
+
+整形の自己テストは次で走る。
+
+```sh
+python3 ~/work/claudecodespeak/hooks/speak-response.py --test
+```
+
+### Claude Code のフック
+
+`~/.claude/settings.json` の `hooks` に Stop フックを足し、`env` で
+`CLAUDE_TTS_SPEAK` を `1` にする。clone していないマシンでは何もしない。
+
+```json
+"env": {
+  "CLAUDE_TTS_SPEAK": "1"
+},
+"hooks": {
+  "Stop": [
+    {
+      "hooks": [
+        {
+          "type": "command",
+          "command": "f=\"$HOME/work/claudecodespeak/hooks/speak-response.py\"; [ ! -f \"$f\" ] || python3 \"$f\"",
+          "timeout": 5
+        }
+      ]
+    }
+  ]
+}
+```
+
+### 止める
+
+`env` の `CLAUDE_TTS_SPEAK` の行を消す。フックの登録は残してよい
+（何もせずに終わる）。
+
+### 使えないと覚えたとき
+
+`pw-play` が無い、エンジン（127.0.0.1:50021）に接続できない、PipeWire が
+動いていない、のどれかなら、フックは鳴らさずに終わり、理由を次のファイルに
+書いて覚える。ファイルがあるあいだは、確かめもせずにすぐ終わる。
+環境変数 `PIPEWIRE_REMOTE` があるときは、PipeWire は確かめない（`[a,b]` のような
+形も取り、つながる先をフックの側で決めきれないため）。
+
+- `$XDG_RUNTIME_DIR/claude-tts.unusable`
+- `$XDG_RUNTIME_DIR` が無い環境では `/tmp/claude-tts-<uid>.unusable`
+
+理由はファイルの中身で分かる。
+
+```sh
+cat "$XDG_RUNTIME_DIR/claude-tts.unusable"
+```
+
+`$XDG_RUNTIME_DIR` のファイルは、その利用者のセッションが全部終わると消える
+（`loginctl enable-linger` を入れていれば再起動まで残る）。`/tmp` のファイルは
+再起動まで残る。
+
+エンジンを一時的に止めたときや、ログイン直後にエンジンが起動し終わる前に
+返答が来たときも覚えるので、鳴るように直したら、ファイルを消す。次の返答から
+確かめ直す。
+
+```sh
+rm "$XDG_RUNTIME_DIR/claude-tts.unusable"
+```
+
 ## 読み上げの辞書
 
 返答の読み上げ（`hooks/speak-response.py`）で読み間違える語は、VOICEVOX の

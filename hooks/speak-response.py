@@ -3,14 +3,17 @@
 
 環境変数 CLAUDE_TTS_SPEAK が 1 のときだけ鳴らす。
 再生中に次の返答が来たら、前の再生を止めてから読む。
-voicevox-engine が動いていないときは、何も鳴らさずに終わる。
+pw-play が無い、エンジンに接続できない、PipeWire が動いていない、のどれかなら
+鳴らさずに終わり、理由を UNUSABLE に書いて覚える。ファイルがあるあいだは確かめもせずに終わる。
 """
 
 import json
 import os
 import queue
 import re
+import shutil
 import signal
+import socket
 import subprocess
 import sys
 import threading
@@ -33,11 +36,35 @@ PLAY = "--play"  # 合成と再生を受け持つ子プロセスの目印
 CUT = r"[、，：）」』】)]|:(?![0-9A-Za-z])|(?=[（「『【])|(?<![0-9A-Za-z])(?=\()"
 CUT_MIN = 8  # これより手前では切らない（「（」だけのような短すぎる塊を作らない）
 SPACE_WITHIN = 30  # この字数までに CUT が無いときだけスペースで切る
-PIDFILE = (
-    Path(os.environ["XDG_RUNTIME_DIR"]) / "claude-tts.pid"
-    if os.environ.get("XDG_RUNTIME_DIR")
-    else Path(f"/tmp/claude-tts-{os.getuid()}.pid")
-)
+RUNTIME = os.environ.get("XDG_RUNTIME_DIR")
+BASE = Path(RUNTIME, "claude-tts") if RUNTIME else Path(f"/tmp/claude-tts-{os.getuid()}")
+PIDFILE = BASE.with_suffix(".pid")
+# 使えないと分かった理由。$XDG_RUNTIME_DIR ならセッションが全部終わるまで、/tmp なら再起動まで残る
+UNUSABLE = BASE.with_suffix(".unusable")
+
+
+def unusable():
+    """鳴らせない理由を返す。鳴らせるなら None。"""
+    if not shutil.which("pw-play"):
+        return "pw-play が無い"
+    # エンジンは接続できるかだけ見る（1 ms かからない）
+    url = urllib.parse.urlsplit(ENGINE)
+    host, port = url.hostname, url.port
+    try:
+        socket.create_connection((host, port), timeout=1).close()
+    except OSError as e:
+        return f"エンジン（{host}:{port}）に接続できない: {e}"
+    # PIPEWIRE_REMOTE は [a,b] のような形も取り、解釈を合わせきれないので、あれば確かめない
+    if os.environ.get("PIPEWIRE_REMOTE"):
+        return None
+    sock = Path(os.environ.get("PIPEWIRE_RUNTIME_DIR") or RUNTIME or "/nonexistent", "pipewire-0")
+    try:
+        with socket.socket(socket.AF_UNIX) as s:
+            s.settimeout(1)
+            s.connect(str(sock))
+    except OSError as e:
+        return f"PipeWire（{sock}）に接続できない: {e}"
+    return None
 
 
 def to_speech(text):
@@ -268,7 +295,13 @@ def main():
     if sys.argv[1:2] == [PLAY]:
         play(sys.argv[2])
         return
-    if os.environ.get("CLAUDE_TTS_SPEAK") != "1":
+    if os.environ.get("CLAUDE_TTS_SPEAK") != "1" or UNUSABLE.exists():
+        return
+    if reason := unusable():
+        try:
+            UNUSABLE.write_text(reason + "\n")
+        except OSError:
+            pass
         return
     try:
         payload = json.load(sys.stdin)

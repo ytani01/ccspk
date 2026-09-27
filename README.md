@@ -9,7 +9,7 @@ Claude Code の返答の冒頭を、手元の VOICEVOX で読み上げる Stop �
 | `hooks/speak-response.py` | Stop フック。返答の冒頭を VOICEVOX で読み上げる |
 | `systemd/voicevox-engine.service` | VOICEVOX のエンジンを常駐させる user unit |
 | `voicevox/user_dict.json` | VOICEVOX のユーザー辞書の元（読み間違える語の読み） |
-| `docs/UsersGuide.md` | 読み上げの辞書の扱い方 |
+| `docs/UsersGuide.md` | 入れ方、フックの設定、止め方、読み上げの辞書の扱い方 |
 
 ## 動き方
 
@@ -17,8 +17,7 @@ Claude Code の返答の冒頭を、手元の VOICEVOX で読み上げる Stop �
 VOICEVOX（夜語トバリ・明るい）で読み上げる。合成は手元のエンジンで行うので、
 返答が外に送られることはない。
 
-- 環境変数 `CLAUDE_TTS_SPEAK` が `1` のときだけ鳴る。`~/.claude/settings.json` の
-  `env` に書いてあるので、その行を消せば止まる
+- 環境変数 `CLAUDE_TTS_SPEAK` が `1` のときだけ鳴る
 - 読み上げるのは整形した先頭 180 文字（30 秒ほど）。超えるときは、文の途中で
   切らないよう、180 字目から 240 字目までで最初の文末まで読む。文末が無ければ
   読点まで、それも無ければ 180 字で切る。コードブロックは
@@ -36,64 +35,14 @@ VOICEVOX（夜語トバリ・明るい）で読み上げる。合成は手元の
   下がる。最初の音までは、エンジンが空いていれば 1.2〜2.5 秒ほど
 - 再生中に次の返答が来たら、前の再生を止めて新しいほうを読む
 - サブエージェントの報告では鳴らない（`SubagentStop` は登録していない）
-- エンジンが動いていないときは、何も鳴らさずに終わる
+- `pw-play` が無い、エンジンに接続できない、PipeWire が動いていない、のどれかなら
+  鳴らさずに終わり、使えないことを覚えて、次からは確かめもせずに終わる。
+  戻し方は [docs/UsersGuide.md](docs/UsersGuide.md#使えないと覚えたとき) にある
 
 ## 入れ方
 
-エンジンは公式リリースの Linux 単体版を使う（約 1.8 GB、展開後 2.2 GB）。
-夜語トバリは 0.25.2 からなので、AUR の `voicevox-engine`（0.24.1）では鳴らない。
-`.vvpp` の中身は zip で、`7z` で展開できる。
-
-```sh
-mkdir -p ~/.local/share/voicevox-engine && cd ~/.local/share/voicevox-engine
-gh release download 0.25.2 -R VOICEVOX/voicevox_engine \
-  -p 'voicevox_engine-linux-cpu-x64-0.25.2.vvpp'
-7z x -o0.25.2 voicevox_engine-linux-cpu-x64-0.25.2.vvpp
-chmod +x 0.25.2/run
-rm voicevox_engine-linux-cpu-x64-0.25.2.vvpp
-systemctl --user link ~/work/claudecodespeak/systemd/voicevox-engine.service
-systemctl --user enable --now voicevox-engine.service
-curl -s http://127.0.0.1:50021/version   # "0.25.2" が返れば起動している
-```
-
-再生には `pw-play`（PipeWire）を使う。版を上げるときは、展開先と
-unit ファイルのパスを揃えて書き換え、`systemctl --user daemon-reload` してから
-再起動する。
-
-読み間違える語（`TODO`、`README`、`CLAUDE`、`JSON` など）は、エンジンの
-ユーザー辞書で読みを直している。辞書の元は `voicevox/user_dict.json`。
-語の足し方と、エンジンを入れ直したときの戻し方は
-[docs/UsersGuide.md](docs/UsersGuide.md#読み上げの辞書) にある。
-
-整形の自己テストは次で走る。
-
-```sh
-python3 ~/work/claudecodespeak/hooks/speak-response.py --test
-```
-
-## Claude Code につなぐ
-
-`~/.claude/settings.json` の `hooks` に Stop フックを足し、`env` で
-`CLAUDE_TTS_SPEAK` を `1` にする。clone していないマシンでは何もしない。
-
-```json
-"env": {
-  "CLAUDE_TTS_SPEAK": "1"
-},
-"hooks": {
-  "Stop": [
-    {
-      "hooks": [
-        {
-          "type": "command",
-          "command": "f=\"$HOME/work/claudecodespeak/hooks/speak-response.py\"; [ ! -f \"$f\" ] || python3 \"$f\"",
-          "timeout": 5
-        }
-      ]
-    }
-  ]
-}
-```
+エンジンの入れ方、Claude Code のフックの設定、止め方は
+[docs/UsersGuide.md](docs/UsersGuide.md#入れ方) にある。
 
 ## TODO の番号
 
