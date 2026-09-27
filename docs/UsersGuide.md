@@ -56,7 +56,7 @@ curl -s -X DELETE http://127.0.0.1:50021/user_dict_word/<ID>
 登録や削除をしたら、辞書の元を書き直してコミットする。
 
 ```sh
-curl -s http://127.0.0.1:50021/user_dict | jq -S . > ~/.claude/voicevox/user_dict.json
+curl -s http://127.0.0.1:50021/user_dict | jq -S . > ~/work/claudecodespeak/voicevox/user_dict.json
 ```
 
 ### 戻す
@@ -65,7 +65,7 @@ curl -s http://127.0.0.1:50021/user_dict | jq -S . > ~/.claude/voicevox/user_dic
 
 ```sh
 curl -s -X POST -H 'Content-Type: application/json' \
-  -d @$HOME/.claude/voicevox/user_dict.json \
+  -d @$HOME/work/claudecodespeak/voicevox/user_dict.json \
   'http://127.0.0.1:50021/import_user_dict?override=true'
 ```
 
