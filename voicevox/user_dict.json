@@ -1,4 +1,38 @@
 {
+  "01e5b424-ce1e-4876-8b05-54e6279fc067": {
+    "accent_associative_rule": "*",
+    "accent_type": 5,
+    "context_id": 1345,
+    "inflectional_form": "*",
+    "inflectional_type": "*",
+    "mora_count": 8,
+    "part_of_speech": "名詞",
+    "part_of_speech_detail_1": "一般",
+    "part_of_speech_detail_2": "*",
+    "part_of_speech_detail_3": "*",
+    "priority": 5,
+    "pronunciation": "ジッソウタントウ",
+    "stem": "*",
+    "surface": "ｉｍｐｌｅｍｅｎｔｅｒ",
+    "yomi": "ジッソウタントウ"
+  },
+  "113b1207-3185-4dc1-bc05-b4b7ec7786dc": {
+    "accent_associative_rule": "*",
+    "accent_type": 4,
+    "context_id": 1345,
+    "inflectional_form": "*",
+    "inflectional_type": "*",
+    "mora_count": 7,
+    "part_of_speech": "名詞",
+    "part_of_speech_detail_1": "一般",
+    "part_of_speech_detail_2": "*",
+    "part_of_speech_detail_3": "*",
+    "priority": 5,
+    "pronunciation": "レビュータントウ",
+    "stem": "*",
+    "surface": "ｒｅｖｉｅｗｅｒ",
+    "yomi": "レビュータントウ"
+  },
   "3a1824ad-c348-4ed1-933b-f5f19427c582": {
     "accent_associative_rule": "*",
     "accent_type": 1,
@@ -49,6 +83,23 @@
     "stem": "*",
     "surface": "ＣＬＡＵＤＥ",
     "yomi": "クロード"
+  },
+  "911f1fc1-26e2-4fbc-832e-2f74adc26b8b": {
+    "accent_associative_rule": "*",
+    "accent_type": 5,
+    "context_id": 1345,
+    "inflectional_form": "*",
+    "inflectional_type": "*",
+    "mora_count": 8,
+    "part_of_speech": "名詞",
+    "part_of_speech_detail_1": "一般",
+    "part_of_speech_detail_2": "*",
+    "part_of_speech_detail_3": "*",
+    "priority": 5,
+    "pronunciation": "ケンショウタントウ",
+    "stem": "*",
+    "surface": "ｖｅｒｉｆｉｅｒ",
+    "yomi": "ケンショウタントウ"
   },
   "9962d564-ce38-45c8-9330-51ae914b909e": {
     "accent_associative_rule": "*",
@@ -117,5 +168,22 @@
     "stem": "*",
     "surface": "ＲＥＡＤＭＥ",
     "yomi": "リードミー"
+  },
+  "e935527e-e4e4-49bc-b617-e28233f3a31f": {
+    "accent_associative_rule": "*",
+    "accent_type": 5,
+    "context_id": 1348,
+    "inflectional_form": "*",
+    "inflectional_type": "*",
+    "mora_count": 8,
+    "part_of_speech": "名詞",
+    "part_of_speech_detail_1": "固有名詞",
+    "part_of_speech_detail_2": "一般",
+    "part_of_speech_detail_3": "*",
+    "priority": 5,
+    "pronunciation": "ハイパーウィスパー",
+    "stem": "*",
+    "surface": "ｈｙｐｒｗｈｓｐｒ",
+    "yomi": "ハイパーウィスパー"
   }
 }
