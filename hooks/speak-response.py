@@ -8,17 +8,20 @@ voicevox-engine が動いていないときは、何も鳴らさずに終わる�
 
 import json
 import os
+import queue
 import re
-import shlex
 import signal
 import subprocess
 import sys
+import threading
 import urllib.parse
+import urllib.request
 from pathlib import Path
 
 LIMIT = 180  # 合成に時間がかかるので、読み上げるのはここまで
 SPEAKER = 119  # 夜語トバリ（明るい）
 ENGINE = "http://127.0.0.1:50021"
+PLAY = "--play"  # 合成と再生を受け持つ子プロセスの目印
 PIDFILE = (
     Path(os.environ["XDG_RUNTIME_DIR"]) / "claude-tts.pid"
     if os.environ.get("XDG_RUNTIME_DIR")
@@ -49,26 +52,62 @@ def stop_playing():
         pid = int(PIDFILE.read_text())
         PIDFILE.unlink()
         # 再生が終わった後に番号が別のプロセスへ使い回されていたら触らない
-        if ENGINE.encode() not in Path(f"/proc/{pid}/cmdline").read_bytes():
+        args = Path(f"/proc/{pid}/cmdline").read_bytes().split(b"\0")
+        if PLAY.encode() not in args or not any(a.endswith(Path(__file__).name.encode()) for a in args):
             return
         os.killpg(pid, signal.SIGTERM)
     except (OSError, ValueError):
         pass
 
 
+def sentences(text):
+    """文に分ける。句点などの後ろで切り、句点は前の文に残す。"""
+    return [s for s in re.split(r"(?<=[。！？!?])\s*", text) if s]
+
+
+def synthesize(sentence):
+    """1 文を合成して wav のバイト列を返す。"""
+    query = urllib.request.urlopen(
+        urllib.request.Request(
+            f"{ENGINE}/audio_query?speaker={SPEAKER}&text=" + urllib.parse.quote(sentence),
+            method="POST",
+        ),
+        # エンジンは要求を 1 つずつ処理し、止めた前の返答の合成も最後まで続ける。
+        # その後ろに並ぶと 10 秒近く待つので、短くすると黙って諦めてしまう
+        timeout=60,
+    ).read()
+    return urllib.request.urlopen(
+        urllib.request.Request(
+            f"{ENGINE}/synthesis?speaker={SPEAKER}",
+            data=query,
+            headers={"Content-Type": "application/json"},
+        ),
+        timeout=60,
+    ).read()
+
+
+def play(text):
+    """1 文目ができたらすぐ鳴らし、2 文目以降は鳴らしている間に合成する。"""
+    wavs = queue.Queue()
+
+    def produce():
+        # エンジンが動いていない、応答が途中で切れた、など何で止まっても、
+        # 鳴らす側が待ち続けないよう終わりの印は必ず入れる
+        try:
+            for s in sentences(text):
+                wavs.put(synthesize(s))
+        finally:
+            wavs.put(None)
+
+    threading.Thread(target=produce, daemon=True).start()
+    while (wav := wavs.get()) is not None:
+        subprocess.run(["pw-play", "-"], input=wav, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
 def speak(text):
     """合成と再生を子プロセスに投げ、その PID を残す。"""
-    query = f"{ENGINE}/audio_query?speaker={SPEAKER}&text=" + urllib.parse.quote(text)
-    synth = f"{ENGINE}/synthesis?speaker={SPEAKER}"
-    cmd = (
-        "f=$(mktemp --suffix=.wav) && trap 'rm -f \"$f\"' EXIT && "
-        f"curl -sf --max-time 5 -X POST {shlex.quote(query)}"
-        " | curl -sf --max-time 60 -X POST -H 'Content-Type: application/json'"
-        f" --data-binary @- {shlex.quote(synth)} > \"$f\""
-        ' && test -s "$f" && pw-play "$f"'
-    )
     p = subprocess.Popen(
-        ["sh", "-c", cmd],
+        [sys.executable, __file__, PLAY, text],
         start_new_session=True,
         stdin=subprocess.DEVNULL,
         stdout=subprocess.DEVNULL,
@@ -95,12 +134,18 @@ def demo():
     assert to_speech("CLAUDE_TTS_SPEAK を足す") == "CLAUDE TTS SPEAK を足す"
     assert to_speech("説明\n```python\nsecret()\n") == "説明 コード省略。"
     assert to_speech("前\n~~~\ncode\n~~~\n後") == "前 コード省略。 後"
+    assert sentences("直した。確かめる？ はい! 終わり") == ["直した。", "確かめる？", "はい!", "終わり"]
+    assert sentences("句点なし") == ["句点なし"]
+    assert sentences("") == []
     print("ok")
 
 
 def main():
     if sys.argv[1:2] == ["--test"]:
         demo()
+        return
+    if sys.argv[1:2] == [PLAY]:
+        play(sys.argv[2])
         return
     if os.environ.get("CLAUDE_TTS_SPEAK") != "1":
         return
