@@ -18,7 +18,12 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
-LIMIT = 180  # 合成に時間がかかるので、読み上げるのはここまで
+LIMIT = 180  # 読み上げるのはおよそここまで。超えるときは次の文末（無ければ読点）まで
+# 延ばすのはここまで。句点の無い英語の返答 2,339 字を 1 回で合成しようとして、
+# エンジンのメモリが 7.8 GB まで膨らみ kill されたことがある
+EXTEND = 60
+ENDS = "。！？!?"  # 文末
+COMMAS = "、，"  # 読点。半角の「,」は 1,000 のような数字の中にも出るので入れない
 SPEAKER = 119  # 夜語トバリ（明るい）
 ENGINE = "http://127.0.0.1:50021"
 PLAY = "--play"  # 合成と再生を受け持つ子プロセスの目印
@@ -49,6 +54,17 @@ def to_speech(text):
     text = text.replace("_", " ")
     text = re.sub(r"[`*~>]", "", text)
     text = re.sub(r"\s+", " ", text).strip()
+    return clip(text)
+
+
+def clip(text):
+    """LIMIT 字を超えるときは、文の途中で切らないよう、LIMIT 字目から LIMIT + EXTEND 字目
+    までで最初の文末まで読む。文末が無ければ読点まで、それも無ければ LIMIT 字で切る。"""
+    window = text[: LIMIT + EXTEND]
+    for chars in (ENDS, COMMAS):
+        m = re.compile(f"[{chars}]").search(window, LIMIT - 1)
+        if m:
+            return text[: m.end()]
     return text[:LIMIT]
 
 
@@ -68,7 +84,7 @@ def stop_playing():
 
 def sentences(text):
     """文に分ける。句点などの後ろで切り、句点は前の文に残す。"""
-    return [s for s in re.split(r"(?<=[。！？!?])\s*", text) if s]
+    return [s for s in re.split(f"(?<=[{ENDS}])\\s*", text) if s]
 
 
 def split_first(sentence):
@@ -161,7 +177,24 @@ def demo():
     )
     got = to_speech(src)
     assert got == "見出し foo.py を 直した。 コード省略。 詳細 を見る", got
-    assert len(to_speech("あ" * 500)) == LIMIT
+    # 上限を超えるときは、EXTEND 字までの間の次の文末まで。無ければ読点まで、
+    # それも無ければ LIMIT 字で切る
+    a = "あ"
+    assert clip(a * LIMIT) == a * LIMIT
+    assert clip(a * (LIMIT - 1) + "。いう。") == a * (LIMIT - 1) + "。"  # ちょうど LIMIT 字目が文末
+    s = a * (LIMIT - 2) + "。" + a * 50  # LIMIT - 1 字目の文末は、延ばす先に使わない
+    assert clip(s) == s[:LIMIT]
+    assert clip(a * (LIMIT - 1) + "い。う。") == a * (LIMIT - 1) + "い。"
+    assert clip(a * (LIMIT + 5) + "、い！う") == a * (LIMIT + 5) + "、い！"  # 読点より文末を優先
+    assert clip(a * LIMIT + "い?う") == a * LIMIT + "い?"
+    assert clip(a * (LIMIT + 20) + "、いう") == a * (LIMIT + 20) + "、"
+    assert clip(a * (LIMIT + 5) + "，いう") == a * (LIMIT + 5) + "，"
+    assert clip(a * (LIMIT + EXTEND - 1) + "。いう") == a * (LIMIT + EXTEND - 1) + "。"  # 延ばせる最後の字
+    assert clip(a * (LIMIT + EXTEND) + "。いう") == a * LIMIT  # それより後ろの文末は使わない
+    assert clip(a * 500) == a * LIMIT
+    # to_speech の最後で clip を通す
+    assert to_speech(a * 300) == a * LIMIT
+    assert to_speech(a * (LIMIT + 5) + "。いう") == a * (LIMIT + 5) + "。"
     assert to_speech("```\nonly code\n```") == "コード省略。"
     assert to_speech("") == ""
     assert to_speech("CLAUDE_TTS_SPEAK を足す") == "CLAUDE TTS SPEAK を足す"
