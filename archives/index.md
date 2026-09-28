@@ -4,6 +4,7 @@
 作り直すので、手で直さない。やらないと決めたものは（対応しない）が付いている。
 進行中の項目は [TODO.md](../TODO.md) にある。
 
+- [TODO-016. dict add に --priority を足す](todo/TODO-016.%20dict%20add%20%E3%81%AB%20--priority%20%E3%82%92%E8%B6%B3%E3%81%99.md)
 - [TODO-015. サブコマンドを整理する](todo/TODO-015.%20%E3%82%B5%E3%83%96%E3%82%B3%E3%83%9E%E3%83%B3%E3%83%89%E3%82%92%E6%95%B4%E7%90%86%E3%81%99%E3%82%8B.md)
 - [TODO-014. CLAUDE.md の仕組みの説明を Developer.md へ移し、文書の重複を整理する](todo/TODO-014.%20CLAUDE.md%20%E3%81%AE%E4%BB%95%E7%B5%84%E3%81%BF%E3%81%AE%E8%AA%AC%E6%98%8E%E3%82%92%20Developer.md%20%E3%81%B8%E7%A7%BB%E3%81%97%E3%80%81%E6%96%87%E6%9B%B8%E3%81%AE%E9%87%8D%E8%A4%87%E3%82%92%E6%95%B4%E7%90%86%E3%81%99%E3%82%8B.md)
 - [TODO-013. Developer.md の定数の表を hook.py に合わせる](todo/TODO-013.%20Developer.md%20%E3%81%AE%E5%AE%9A%E6%95%B0%E3%81%AE%E8%A1%A8%E3%82%92%20hook.py%20%E3%81%AB%E5%90%88%E3%82%8F%E3%81%9B%E3%82%8B.md)

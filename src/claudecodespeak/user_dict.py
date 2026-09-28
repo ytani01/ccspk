@@ -1,6 +1,6 @@
 """VOICEVOX のエンジンのユーザー辞書を操作する（claudecodespeak dict）。
 
-  claudecodespeak dict add <表記> <読み（カタカナ）> [--accent N] [--type TYPE] [--speak]
+  claudecodespeak dict add <表記> <読み（カタカナ）> [--accent N] [--type TYPE] [--priority N] [--speak]
   claudecodespeak dict kana <文>
   claudecodespeak dict list
   claudecodespeak dict remove <表記>
@@ -100,8 +100,9 @@ def dict_group():
 @click.argument("pronunciation")
 @click.option("--accent", type=int, help="音が下がる直前の音が頭から何番目か。0 は平板。省くとエンジンに任せる")
 @click.option("--type", "type_", type=click.Choice(list(TYPES.values())), help="品詞。省くと、新しい語は PROPER_NOUN、登録済みの語は今の品詞のまま")
+@click.option("--priority", type=click.IntRange(0, 10), help="優先度（0〜10）。エンジン標準の読みに負けるときに上げる。省くと、新しい語は 5、登録済みの語は今の優先度のまま")
 @click.option("--speak", is_flag=True, help="登録後に表記を読み上げて確かめる")
-def add(surface, pronunciation, accent, type_, speak):
+def add(surface, pronunciation, accent, type_, priority, speak):
     """VOICEVOX のユーザー辞書に語を足す。
 
     SURFACE は表記（英字は大文字と小文字を別の語として扱う）、PRONUNCIATION は読み（カタカナ）。
@@ -112,10 +113,11 @@ def add(surface, pronunciation, accent, type_, speak):
     uuid, old = find(surface)
     if uuid:
         kept = TYPES.get((old["part_of_speech"], old["part_of_speech_detail_1"]), "PROPER_NOUN")
-        call("PUT", f"/user_dict_word/{uuid}", **word, word_type=type_ or kept, priority=old["priority"])
+        call("PUT", f"/user_dict_word/{uuid}", **word, word_type=type_ or kept, priority=old["priority"] if priority is None else priority)
         print(f"書き換えた: {surface} → {pronunciation}（accent_type {accent}、ID {uuid}）")
     else:
-        uuid = json.loads(call("POST", "/user_dict_word", **word, word_type=type_ or "PROPER_NOUN"))
+        extra = {} if priority is None else {"priority": priority}  # 省けばエンジンの既定（5）
+        uuid = json.loads(call("POST", "/user_dict_word", **word, **extra, word_type=type_ or "PROPER_NOUN"))
         print(f"登録した: {surface} → {pronunciation}（accent_type {accent}、ID {uuid}）")
     q = query(surface)
     print(f"読み: {q['kana']}")
