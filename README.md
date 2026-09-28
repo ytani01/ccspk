@@ -9,6 +9,7 @@ Claude Code の返答の冒頭を、手元の VOICEVOX で読み上げる Stop �
 | `hooks/speak-response.py` | Stop フック。返答の冒頭を VOICEVOX で読み上げる |
 | `systemd/voicevox-engine.service` | VOICEVOX のエンジンを常駐させる user unit |
 | `voicevox/user_dict.json` | VOICEVOX のユーザー辞書の元（読み間違える語の読み） |
+| `voicevox/add-word.py` | VOICEVOX のユーザー辞書に語を足す |
 | `docs/UsersGuide.md` | 入れ方、フックの設定、止め方、読み上げの辞書の扱い方 |
 | `docs/Developer.md` | 動き方の細かい決まり、フックの仕組み、テストと動作の確かめ方 |
 

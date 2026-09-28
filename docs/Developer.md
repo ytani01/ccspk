@@ -1,6 +1,7 @@
 # 開発者向け
 
-コードは `hooks/speak-response.py` の 1 ファイルだけ。依存は Python の標準ライブラリ、
+フックのコードは `hooks/speak-response.py` の 1 ファイルだけ（辞書に語を足す
+`voicevox/add-word.py` は別に動く）。依存は Python の標準ライブラリ、
 VOICEVOX のエンジン（`127.0.0.1:50021`）、`pw-play`。読み上げの範囲や切り方など、
 利用者から見た動きは下の「動き方」、入れ方と辞書は
 [UsersGuide](UsersGuide.md) にある。
@@ -140,6 +141,7 @@ Stop フックとしては、次の順に進む。どこかで条件を満たさ
 
 ```sh
 python3 hooks/speak-response.py --test
+python3 voicevox/add-word.py --test   # アクセントの位置の決め方（accent_of）
 ```
 
 整形や分割を変えたら、`demo()` に例を足す。`unusable()` と `main()` の分岐は

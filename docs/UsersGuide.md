@@ -120,6 +120,24 @@ curl -s -X POST -G http://127.0.0.1:50021/audio_query \
 
 ### 登録する
 
+`voicevox/add-word.py` に表記と読みを渡す。アクセントの位置はエンジンに任せ、
+登録後の読みを表示する。同じ表記が登録済みなら、読みを書き換える（品詞と優先度は
+今のまま）。
+
+```sh
+voicevox/add-word.py README リードミー --speak
+```
+
+- `--speak` を付けると、登録後に表記を読み上げる
+- 表示した読みのアクセントが違えば、`--accent` で位置を指定して登録し直す
+- エンジンは、1 語だけでは平板と尾高（最後の音の後で下がる）を見分けない。
+  そのため `add-word.py` は、句が 1 つで最後の音で下がるときは平板（`0`）として
+  登録する。尾高の語は `--accent <音の数>` で登録し直す
+- 品詞は `--type`。省くと、新しい語は `PROPER_NOUN`、登録済みの語は今の品詞のまま
+- `voicevox/user_dict.json` への書き戻しはしない（下の「リポジトリに残す」）
+
+`curl` で登録するなら次のとおり。
+
 ```sh
 curl -s -X POST -G http://127.0.0.1:50021/user_dict_word \
   --data-urlencode surface=README \
@@ -147,7 +165,8 @@ curl -s http://127.0.0.1:50021/user_dict \
 curl -s -X DELETE http://127.0.0.1:50021/user_dict_word/<ID>
 ```
 
-読みを変えるときは、消して登録し直す（`PUT /user_dict_word/<ID>` でもよい）。
+読みを変えるときは、`add-word.py` に同じ表記で渡す（`curl` なら消して登録し直すか、
+`PUT /user_dict_word/<ID>`）。
 
 ### リポジトリに残す
 
