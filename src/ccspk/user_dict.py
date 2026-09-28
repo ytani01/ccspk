@@ -134,7 +134,7 @@ def dict_group():
 @click.argument("pronunciation")
 @click.option("--accent", type=int, help="音が下がる直前の音が頭から何番目か。0 は平板。省くとエンジンに任せる")
 @click.option("--type", "type_", type=click.Choice(list(TYPES.values())), help="品詞。省くと、新しい単語は PROPER_NOUN、登録済みの単語は今の品詞のまま")
-@click.option("--priority", type=click.IntRange(0, 10), help="優先度（0〜10）。エンジン標準の読みに負けるときに上げる。省くと、新しい単語は 5、登録済みの単語は今の優先度のまま")
+@click.option("--priority", type=click.IntRange(0, 10), help="優先度（0〜10）。エンジン標準の読みに負けるときに上げる。省くと、新しい単語は 7（エンジンの既定 5 より上）、登録済みの単語は今の優先度のまま")
 @click.option("--speak", is_flag=True, help="登録後に表記を読み上げて確かめる")
 def add(surface, pronunciation, accent, type_, priority, speak):
     """VOICEVOX のユーザー辞書に単語を足す。
@@ -150,8 +150,7 @@ def add(surface, pronunciation, accent, type_, priority, speak):
         call("PUT", f"/user_dict_word/{uuid}", **word, word_type=type_ or kept, priority=old["priority"] if priority is None else priority)
         print(f"書き換えた: {surface} → {pronunciation}（accent_type {accent}、ID {uuid}）")
     else:
-        extra = {} if priority is None else {"priority": priority}  # 省けばエンジンの既定（5）
-        uuid = json.loads(call("POST", "/user_dict_word", **word, **extra, word_type=type_ or "PROPER_NOUN"))
+        uuid = json.loads(call("POST", "/user_dict_word", **word, word_type=type_ or "PROPER_NOUN", priority=7 if priority is None else priority))
         print(f"登録した: {surface} → {pronunciation}（accent_type {accent}、ID {uuid}）")
     save()
     q = query(surface)
