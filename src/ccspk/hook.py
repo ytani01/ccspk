@@ -45,6 +45,8 @@ MODULE = "ccspk.hook"  # 子プロセスは python -m でこのモジュール�
 CUT = r"[、，：）」』】)]|:(?![0-9A-Za-z])|(?=[（「『【])|(?<![0-9A-Za-z])(?=\()"
 CUT_MIN = 8  # これより手前では切らない（「（」だけのような短すぎる塊を作らない）
 SPACE_WITHIN = 30  # この字数までに CUT が無いときだけスペースで切る
+# 桁ごとに読むときの 0〜9。2・5 は、「ニ」「ゴ」だと前後の桁と句が分かれやすいので伸ばす
+DIGITS = "ゼロ イチ ニー サン ヨン ゴー ロク ナナ ハチ キュウ".split()
 RUNTIME = os.environ.get("XDG_RUNTIME_DIR")
 BASE = Path(RUNTIME, "ccspk") if RUNTIME else Path(f"/tmp/ccspk-{os.getuid()}")
 PIDFILE = BASE.with_suffix(".pid")
@@ -100,10 +102,21 @@ def to_speech(text):
     text = re.sub(r"^\s*#+\s*", "", text, flags=re.M)
     text = re.sub(r"^\s*(?:[-*+]|\d+\.)\s+", "", text, flags=re.M)
     text = text.replace("_", " ")
-    # エンジンが読まない記号（1〜4 → イチ、ヨン）。半角の「~」は取り消し線や ~/ にも
+    # エンジンが読まない記号。「~」は範囲にも使うので下で扱う。`TODO-013` の件 のように
+    # 囲まれた番号の後ろのスペースを TODO の置き換えで消せるよう、ここで消す
+    text = re.sub(r"[`*>]", "", text)
+    # TODO-027 は「トゥードゥー ゼロニーナナ」と桁ごとに読む。「-」を残すと間が入り、消すと
+    # TODO-100 が「ヒャク」になるのでカナにする。TODO-020〜022 の後ろの番号も同じ。
+    # 直後のスペースは、下の数字と同じく日本語が続くときだけ消す
+    text = re.sub(
+        r"(?<![0-9A-Za-z])TODO-([0-9]+)(?:[ \t]*[〜～~→][ \t]*([0-9]+))?(?:[ \t]+(?=[\u3041-\u30ff\u4e00-\u9fff]))?",
+        lambda m: "TODO" + "から".join("".join(DIGITS[int(c)] for c in g) for g in m.groups() if g),
+        text,
+    )
+    # 範囲の記号（1〜4 → イチ、ヨン）。半角の「~」は取り消し線や ~/ にも
     # 出て下で消すので、数字に挟まれたときだけ。前後のスペースは「から」の後に間が入るので消す
     text = re.sub(r"(?<=[0-9０-９])[ \t]*~[ \t]*(?=[0-9０-９])", "から", text)
-    text = re.sub(r"[`*~>]", "", text)
+    text = text.replace("~", "")
     text = re.sub(r"[ \t]*[〜～→][ \t]*", "から", text)
     # 数字と単位の間のスペースで区切って読む（180 字 → ヒャクハチジュウ、ジ）ので、
     # 同じ行で日本語が続くときだけ消す。英語が続くとき（3 files）は 1 語と読まれないよう残す
@@ -303,7 +316,14 @@ def demo():
     assert to_speech("2 行 → 1 行、1 〜 4") == "2行から1行、1から4"
     assert to_speech("1~4 秒、2 ~ 3、~/a、a~b") == "1から4秒、2から3、/a、ab"
     assert to_speech("~100 件、1 ~/a") == "100件、1 /a"  # 数字が片側だけなら置き換えない
-    assert to_speech("180 字、2 つ、TODO-013 の件") == "180字、2つ、TODO-013の件"
+    assert to_speech("180 字、2 つ、TODO-013 の件") == "180字、2つ、TODOゼロイチサンの件"
+    # TODO-NNN の番号は桁ごとのカナにする。範囲の後ろの番号も
+    assert to_speech("TODO-100 と TODO-025") == "TODOイチゼロゼロと TODOゼロニーゴー"
+    assert to_speech("TODO-020〜022、TODO-001 ~ 003 files、TODO-7→8") == (
+        "TODOゼロニーゼロからゼロニーニー、TODOゼロゼロイチからゼロゼロサン files、TODOナナからハチ")
+    assert to_speech("`TODO-013` の件、**TODO-020**～`022` の件、TODO-001 ～ 002 の件") == (
+        "TODOゼロイチサンの件、TODOゼロニーゼロからゼロニーニーの件、TODOゼロゼロイチからゼロゼロニーの件")
+    assert to_speech("PR-12、XTODO-1、TODO-1〜a") == "PR-12、XTODO-1、TODOイチからa"  # TODO- のほかは変えない
     assert to_speech("3 files と 1 ファイル、v1 A") == "3 files と 1ファイル、v1 A"
     assert to_speech("x 1  字、**2** 行、１８０ 字") == "x 1字、2行、１８０字"
     assert to_speech("手順 1\n次へ") == "手順 1 次へ"  # 行をまたぐときはつなげない
