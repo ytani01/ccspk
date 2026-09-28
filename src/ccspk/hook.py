@@ -52,7 +52,7 @@ PIDFILE = BASE.with_suffix(".pid")
 UNUSABLE = BASE.with_suffix(".unusable")
 # 最後に読んだ文。返答の最後の文章は MessageDisplay と Stop の両方から来るので、2 度読まない
 LAST = BASE.with_suffix(".last")
-LOCK = BASE.with_suffix(".lock")  # フックは並んで走るので、PARTS と LAST を触るあいだは 1 つずつ通す
+LOCK = BASE.with_suffix(".lock")  # フックは並んで走るので、PARTS・LAST・PIDFILE を触るあいだは 1 つずつ通す（ccspk stop も取る）
 # MessageDisplay は 1 つの文章を index ごとに分けて渡し、最後の分に final が付く。
 # フックは並んで走り、後ろの分が先に届くこともあるので、分けてここに置き、そろったらつなぐ
 PARTS = BASE.with_suffix(".parts")
@@ -135,17 +135,18 @@ def clip(text):
 
 
 def stop_playing():
-    """前の再生をプロセスグループごと止める。"""
+    """前の再生をプロセスグループごと止める。止めたら True を返す。"""
     try:
         pid = int(PIDFILE.read_text())
         PIDFILE.unlink()
         # 再生が終わった後に番号が別のプロセスへ使い回されていたら触らない
         args = Path(f"/proc/{pid}/cmdline").read_bytes().split(b"\0")
         if PLAY.encode() not in args or MODULE.encode() not in args:
-            return
+            return False
         os.killpg(pid, signal.SIGTERM)
+        return True
     except (OSError, ValueError):
-        pass
+        return False
 
 
 def assemble(payload):
@@ -445,6 +446,20 @@ def main():
 def say(text):
     """合成と再生だけを試す（子プロセスと同じ動き）。"""
     play(text)
+
+
+@click.command()
+def stop():
+    """鳴っている読み上げを止める（エンジンの合成は止めない）。"""
+    # フックが子プロセスを起こして PIDFILE を書き換えている途中に読まない
+    try:
+        lock = open(LOCK, "w")
+        fcntl.flock(lock, fcntl.LOCK_EX)
+    except OSError:
+        lock = None
+    print("止めた" if stop_playing() else "鳴っていない")
+    if lock:
+        lock.close()
 
 
 @click.command()

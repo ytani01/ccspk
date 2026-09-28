@@ -1,7 +1,7 @@
 # 開発者向け
 
 コードは `src/ccspk/` にあり、コマンド `ccspk` のサブコマンドに分かれる
-（`cli.py` がまとめる）。フックは `hook.py`（`ccspk hook`・`say`・`status`）、
+（`cli.py` がまとめる）。フックは `hook.py`（`ccspk hook`・`say`・`stop`・`status`）、
 辞書を操作するのは `user_dict.py`（`ccspk dict`）。依存は click、loguru、
 VOICEVOX のエンジン（`127.0.0.1:50021`）、`pw-play`。読み上げの範囲や切り方など、
 利用者から見た動きは下の「動き方」、インストールと辞書は
@@ -54,12 +54,13 @@ MessageDisplay フックとして、`AskUserQuestion` を呼ぶ直前に PreTool
 先に届くこともある。PreToolUse なら `tool_name` と `tool_input.questions[].question`。
 `agent_id` があるとき（サブエージェント）は読まない。
 
-`hook.py` にはサブコマンドが 3 つある。
+`hook.py` にはサブコマンドが 4 つある。
 
 | サブコマンド | 動き |
 |---|---|
 | `hook` | フックとして動く（下の順） |
 | `say <本文>` | 合成と再生だけをする（`play()`）。子プロセスと同じ動き |
+| `stop` | `LOCK` を取ってから、鳴っている再生を止める（`stop_playing()`）。止めたら「止めた」、鳴っていなければ「鳴っていない」と表示する。エンジンの合成は止めない |
 | `status [--clear]` | `UNUSABLE` があれば理由を表示する。`--clear` なら消す |
 
 `hook.py` の `main()`（`ccspk hook`）は、フックとして次の順に進む。
@@ -104,7 +105,7 @@ MessageDisplay フックとして、`AskUserQuestion` を呼ぶ直前に PreTool
 ### 前の再生を止める
 
 `stop_playing()` は `PIDFILE` の PID を読み、ファイルを消してから、
-そのプロセスグループに `SIGTERM` を送る。再生が終わったあとで PID が別の
+そのプロセスグループに `SIGTERM` を送る。送ったら `True` を返す。再生が終わったあとで PID が別の
 プロセスに使い回されていることがあるので、`/proc/<pid>/cmdline` に `--play` と
 `ccspk.hook` があるときだけ送る（子プロセスの起こし方は上の「子プロセス」）。
 
@@ -130,7 +131,7 @@ MessageDisplay フックとして、`AskUserQuestion` を呼ぶ直前に PreTool
 | `PIDFILE` | `ccspk.pid`（`/tmp/ccspk-<uid>.pid`） | 再生中の子プロセスの PID |
 | `UNUSABLE` | `ccspk.unusable`（`/tmp/ccspk-<uid>.unusable`） | 鳴らせない理由 |
 | `LAST` | `ccspk.last`（`/tmp/ccspk-<uid>.last`） | 最後に読んだ文（整えた後） |
-| `LOCK` | `ccspk.lock`（`/tmp/ccspk-<uid>.lock`） | 同時に来たフックを 1 つずつ通すためのロック |
+| `LOCK` | `ccspk.lock`（`/tmp/ccspk-<uid>.lock`） | 同時に来たフックを 1 つずつ通すためのロック。`ccspk stop` も PIDFILE を触る前に取る |
 | `PARTS` | `ccspk.parts/`（`/tmp/ccspk-<uid>.parts/`） | MessageDisplay の分。`<message_id>.<index>` と、最後の分の番号を書いた `<message_id>.final` |
 
 ### 整形と分割
