@@ -3,15 +3,15 @@
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 Claude Code の返答の冒頭を、手元の VOICEVOX で読み上げるフック。コマンドは
-`claudecodespeak`（`hook`・`say`・`status`・`test`・`dict` のサブコマンド。`cli.py` がまとめる）。
+`ccspk`（`hook`・`say`・`status`・`test`・`dict` のサブコマンド。`cli.py` がまとめる）。
 仕組みとテストは `docs/Developer.md`、インストールと辞書は `docs/UsersGuide.md` にある。
 
 ## コマンド
 
 ```sh
 uv sync                          # .venv に入れる
-uv run claudecodespeak test      # hook・dict の自己テスト（demo() の assert）
-.venv/bin/claudecodespeak say '文'  # 合成と再生だけを試す
+uv run ccspk test      # hook・dict の自己テスト（demo() の assert）
+.venv/bin/ccspk say '文'  # 合成と再生だけを試す
 uv tool install .                # 利用者の環境へ入れる
 ```
 

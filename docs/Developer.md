@@ -1,8 +1,8 @@
 # 開発者向け
 
-コードは `src/claudecodespeak/` にあり、コマンド `claudecodespeak` のサブコマンドに分かれる
-（`cli.py` がまとめる）。フックは `hook.py`（`claudecodespeak hook`・`say`・`status`）、
-辞書を操作するのは `user_dict.py`（`claudecodespeak dict`）。依存は click、loguru、
+コードは `src/ccspk/` にあり、コマンド `ccspk` のサブコマンドに分かれる
+（`cli.py` がまとめる）。フックは `hook.py`（`ccspk hook`・`say`・`status`）、
+辞書を操作するのは `user_dict.py`（`ccspk dict`）。依存は click、loguru、
 VOICEVOX のエンジン（`127.0.0.1:50021`）、`pw-play`。読み上げの範囲や切り方など、
 利用者から見た動きは下の「動き方」、インストールと辞書は
 [UsersGuide](UsersGuide.md) にある。
@@ -47,7 +47,7 @@ VOICEVOX のエンジン（`127.0.0.1:50021`）、`pw-play`。読み上げの範
 
 Claude Code は、返答を終えるたびに Stop フックとして、文章を表示するたびに
 MessageDisplay フックとして、`AskUserQuestion` を呼ぶ直前に PreToolUse フックとして
-`claudecodespeak hook` を起動し、標準入力に JSON を渡す。
+`ccspk hook` を起動し、標準入力に JSON を渡す。
 使うのは、Stop なら `last_assistant_message`（最後の返答の本文）、MessageDisplay なら
 `message_id`・`index`・`delta`・`final`。MessageDisplay は 1 つの文章を `index` ごとの分
 （`delta`）に分けて渡し、最後の分に `final: true` が付く。フックは並んで走り、後ろの分が
@@ -62,7 +62,7 @@ MessageDisplay フックとして、`AskUserQuestion` を呼ぶ直前に PreTool
 | `say <本文>` | 合成と再生だけをする（`play()`）。子プロセスと同じ動き |
 | `status [--clear]` | `UNUSABLE` があれば理由を表示する。`--clear` なら消す |
 
-`hook.py` の `main()`（`claudecodespeak hook`）は、フックとして次の順に進む。
+`hook.py` の `main()`（`ccspk hook`）は、フックとして次の順に進む。
 どこかで条件を満たさなければ、そこで終わる。
 
 1. 環境変数 `CLAUDE_TTS_SPEAK` が `1` か
@@ -84,7 +84,7 @@ MessageDisplay フックとして、`AskUserQuestion` を呼ぶ直前に PreTool
 
 ### 子プロセス
 
-`speak()` は、`python -P -m claudecodespeak.hook --play <本文>` で子プロセスを起こす。
+`speak()` は、`python -P -m ccspk.hook --play <本文>` で子プロセスを起こす。
 `-P` は、Claude Code の作業ディレクトリを `sys.path` に入れないため。
 `start_new_session=True` で新しいセッション（兼プロセスグループ）にするので、
 子プロセスが起こした `pw-play` まで、グループごと止められる。
@@ -106,7 +106,7 @@ MessageDisplay フックとして、`AskUserQuestion` を呼ぶ直前に PreTool
 `stop_playing()` は `PIDFILE` の PID を読み、ファイルを消してから、
 そのプロセスグループに `SIGTERM` を送る。再生が終わったあとで PID が別の
 プロセスに使い回されていることがあるので、`/proc/<pid>/cmdline` に `--play` と
-`claudecodespeak.hook` があるときだけ送る（子プロセスの起こし方は上の「子プロセス」）。
+`ccspk.hook` があるときだけ送る（子プロセスの起こし方は上の「子プロセス」）。
 
 ### 鳴らせるかを確かめる
 
@@ -127,11 +127,11 @@ MessageDisplay フックとして、`AskUserQuestion` を呼ぶ直前に PreTool
 
 | 定数 | 場所 | 中身 |
 |---|---|---|
-| `PIDFILE` | `claude-tts.pid`（`/tmp/claude-tts-<uid>.pid`） | 再生中の子プロセスの PID |
-| `UNUSABLE` | `claude-tts.unusable`（`/tmp/claude-tts-<uid>.unusable`） | 鳴らせない理由 |
-| `LAST` | `claude-tts.last`（`/tmp/claude-tts-<uid>.last`） | 最後に読んだ文（整えた後） |
-| `LOCK` | `claude-tts.lock`（`/tmp/claude-tts-<uid>.lock`） | 同時に来たフックを 1 つずつ通すためのロック |
-| `PARTS` | `claude-tts.parts/`（`/tmp/claude-tts-<uid>.parts/`） | MessageDisplay の分。`<message_id>.<index>` と、最後の分の番号を書いた `<message_id>.final` |
+| `PIDFILE` | `ccspk.pid`（`/tmp/ccspk-<uid>.pid`） | 再生中の子プロセスの PID |
+| `UNUSABLE` | `ccspk.unusable`（`/tmp/ccspk-<uid>.unusable`） | 鳴らせない理由 |
+| `LAST` | `ccspk.last`（`/tmp/ccspk-<uid>.last`） | 最後に読んだ文（整えた後） |
+| `LOCK` | `ccspk.lock`（`/tmp/ccspk-<uid>.lock`） | 同時に来たフックを 1 つずつ通すためのロック |
+| `PARTS` | `ccspk.parts/`（`/tmp/ccspk-<uid>.parts/`） | MessageDisplay の分。`<message_id>.<index>` と、最後の分の番号を書いた `<message_id>.final` |
 
 ### 整形と分割
 
@@ -157,7 +157,7 @@ MessageDisplay フックとして、`AskUserQuestion` を呼ぶ直前に PreTool
 | `SPEAKER` | 119 | 話者（夜語トバリ・明るい） |
 | `ENGINE` | `http://127.0.0.1:50021` | エンジンの URL |
 | `PLAY` | `--play` | 子プロセスの目印。`stop_playing()` は `MODULE` と合わせて見分ける |
-| `MODULE` | `claudecodespeak.hook` | 子プロセスが `python -m` で起こすモジュール。`stop_playing()` の目印にもなる |
+| `MODULE` | `ccspk.hook` | 子プロセスが `python -m` で起こすモジュール。`stop_playing()` の目印にもなる |
 | `CUT` | 正規表現 | 1 文目を切る区切り |
 | `CUT_MIN` | 8 | これより手前では切らない |
 | `SPACE_WITHIN` | 30 | この字数までに `CUT` が無いときだけ、スペースで切る |
@@ -175,7 +175,7 @@ MessageDisplay フックとして、`AskUserQuestion` を呼ぶ直前に PreTool
 個別に走らせる手段は無い。lint の設定は無い。
 
 ```sh
-uv run claudecodespeak test   # hook の demo() と dict のアクセントの位置の決め方（accent_of）を両方
+uv run ccspk test   # hook の demo() と dict のアクセントの位置の決め方（accent_of）を両方
 ```
 
 MessageDisplay の分をつなぐ `assemble()` も、一時ディレクトリで確かめている。
@@ -186,11 +186,11 @@ PreToolUse の質問の文を取り出す `questions()` も確かめている。
 ### フックを手で動かす
 
 コマンドは、どれもリポジトリの直下で走らせる。`uv sync` で `.venv` に入れておき、
-入れ直さずに手元のコードを試すため `.venv/bin/claudecodespeak` を呼ぶ。
+入れ直さずに手元のコードを試すため `.venv/bin/ccspk` を呼ぶ。
 
-本物の `$XDG_RUNTIME_DIR` で試して `claude-tts.unusable` が残ると、ファイルを
+本物の `$XDG_RUNTIME_DIR` で試して `ccspk.unusable` が残ると、ファイルを
 消すまで読み上げが止まる（[UsersGuide](UsersGuide.md#読み上げが止まったままのとき)）。
-また、本物の `claude-tts.pid` を使うと、そのとき鳴っている読み上げを止めてしまう。
+また、本物の `ccspk.pid` を使うと、そのとき鳴っている読み上げを止めてしまう。
 `XDG_RUNTIME_DIR` を一時ディレクトリに向け、PipeWire の場所だけ
 `PIPEWIRE_RUNTIME_DIR` で本物を指す。
 
@@ -198,28 +198,28 @@ PreToolUse の質問の文を取り出す `questions()` も確かめている。
 tmp=$(mktemp -d)
 echo '{"last_assistant_message":"確認です。二つ目の文です。"}' \
   | CLAUDE_TTS_SPEAK=1 XDG_RUNTIME_DIR=$tmp PIPEWIRE_RUNTIME_DIR=/run/user/$(id -u) \
-    .venv/bin/claudecodespeak hook
+    .venv/bin/ccspk hook
 find $tmp -type f
 rm -r $tmp
 ```
 
-使えると判定して子プロセスを起こせば、`$tmp/claude-tts.pid`・`$tmp/claude-tts.last`・
-`$tmp/claude-tts.lock` ができる。MessageDisplay として試すなら、
+使えると判定して子プロセスを起こせば、`$tmp/ccspk.pid`・`$tmp/ccspk.last`・
+`$tmp/ccspk.lock` ができる。MessageDisplay として試すなら、
 `{"hook_event_name":"MessageDisplay","message_id":"m1","index":0,"final":true,"delta":"…"}` を渡す
-（`$tmp/claude-tts.parts/` もできる）。PreToolUse として試すなら、
-`{"hook_event_name":"PreToolUse","tool_name":"AskUserQuestion","tool_input":{"questions":[{"question":"…"}]}}` を渡す。5 秒のうちに同じ文を渡すと、`claude-tts.pid` の PID は
+（`$tmp/ccspk.parts/` もできる）。PreToolUse として試すなら、
+`{"hook_event_name":"PreToolUse","tool_name":"AskUserQuestion","tool_input":{"questions":[{"question":"…"}]}}` を渡す。5 秒のうちに同じ文を渡すと、`ccspk.pid` の PID は
 変わらない（2 度読まない）。JSON に `\n` を入れるときは、zsh の `echo` は改行に変えてしまうので
 `printf '%s'` で渡す。
-使えないと判定したときは、`$tmp/claude-tts.unusable` ができ、中身が理由になる。
+使えないと判定したときは、`$tmp/ccspk.unusable` ができ、中身が理由になる。
 
 `pw-play` が無いときを再現するなら、別の一時ディレクトリで、`PATH` を空にする。
-`.venv/bin/claudecodespeak` は Python を絶対パスで呼ぶので、`PATH` が空でも動く。
+`.venv/bin/ccspk` は Python を絶対パスで呼ぶので、`PATH` が空でも動く。
 
 ```sh
 tmp=$(mktemp -d)
 echo '{"last_assistant_message":"確認です。"}' \
-  | CLAUDE_TTS_SPEAK=1 XDG_RUNTIME_DIR=$tmp PATH=/nonexistent .venv/bin/claudecodespeak hook
-XDG_RUNTIME_DIR=$tmp .venv/bin/claudecodespeak status   # pw-play が無い
+  | CLAUDE_TTS_SPEAK=1 XDG_RUNTIME_DIR=$tmp PATH=/nonexistent .venv/bin/ccspk hook
+XDG_RUNTIME_DIR=$tmp .venv/bin/ccspk status   # pw-play が無い
 rm -r $tmp
 ```
 
@@ -227,7 +227,7 @@ rm -r $tmp
 子プロセスを直接起動して、合成と再生だけを試す（整形は通らない）。
 
 ```sh
-.venv/bin/claudecodespeak say '合成と再生だけを試す。'
+.venv/bin/ccspk say '合成と再生だけを試す。'
 ```
 
 ### 最初の音までの時間
@@ -245,11 +245,11 @@ tmp = tempfile.mkdtemp()
 env = {**os.environ, "CLAUDE_TTS_SPEAK": "1", "XDG_RUNTIME_DIR": tmp,
        "PIPEWIRE_RUNTIME_DIR": f"/run/user/{os.getuid()}"}
 t0 = time.monotonic()
-subprocess.run([".venv/bin/claudecodespeak", "hook"], text=True, env=env, check=True,
+subprocess.run([".venv/bin/ccspk", "hook"], text=True, env=env, check=True,
                input=json.dumps({"last_assistant_message": "最初の音までを測る、短い文です。"}))
-pid = Path(tmp, "claude-tts.pid")
+pid = Path(tmp, "ccspk.pid")
 if not pid.exists():
-    raise SystemExit(Path(tmp, "claude-tts.unusable").read_text())
+    raise SystemExit(Path(tmp, "ccspk.unusable").read_text())
 pgid = pid.read_text()
 while subprocess.run(["pgrep", "-g", pgid, "-x", "pw-play"], stdout=subprocess.DEVNULL).returncode:
     if time.monotonic() - t0 > 60:

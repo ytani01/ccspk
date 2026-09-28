@@ -38,7 +38,7 @@ COMMAS = "、，"  # 読点。半角の「,」は 1,000 のような数字の中
 SPEAKER = 119  # 夜語トバリ（明るい）
 ENGINE = "http://127.0.0.1:50021"
 PLAY = "--play"  # 合成と再生を受け持つ子プロセスの目印
-MODULE = "claudecodespeak.hook"  # 子プロセスは python -m でこのモジュールを起こす。stop_playing() はこれで見分ける
+MODULE = "ccspk.hook"  # 子プロセスは python -m でこのモジュールを起こす。stop_playing() はこれで見分ける
 # 1 文目を短く切る区切り。読点・閉じ括弧・コロンの後ろ、開き括弧の前。
 # 半角の「,」は 1,000、「:」は 12:30、「(」は name() のように語の中にも出るので、
 # 「,」は入れず、「:」は英数字が続くとき、「(」は英数字の直後のときは切らない
@@ -46,7 +46,7 @@ CUT = r"[、，：）」』】)]|:(?![0-9A-Za-z])|(?=[（「『【])|(?<![0-9A-Z
 CUT_MIN = 8  # これより手前では切らない（「（」だけのような短すぎる塊を作らない）
 SPACE_WITHIN = 30  # この字数までに CUT が無いときだけスペースで切る
 RUNTIME = os.environ.get("XDG_RUNTIME_DIR")
-BASE = Path(RUNTIME, "claude-tts") if RUNTIME else Path(f"/tmp/claude-tts-{os.getuid()}")
+BASE = Path(RUNTIME, "ccspk") if RUNTIME else Path(f"/tmp/ccspk-{os.getuid()}")
 PIDFILE = BASE.with_suffix(".pid")
 # 使えないと分かった理由。$XDG_RUNTIME_DIR ならセッションが全部終わるまで、/tmp なら再起動まで残る
 UNUSABLE = BASE.with_suffix(".unusable")

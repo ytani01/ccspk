@@ -12,7 +12,7 @@
 | 見込み | Opus 5.5 / effort medium | main（実装）+ reviewer（Opus 5.5 / high）+ verifier（Sonnet 5.5 / medium） |
 
 - [ ] `dict add` で新しい単語を登録するとき、`--priority` を省くと 7 にする
-  （`src/claudecodespeak/user_dict.py` の `add`。今はエンジンの既定 5 に任せている）
+  （`src/ccspk/user_dict.py` の `add`。今はエンジンの既定 5 に任せている）
 - [ ] `--priority` の help と `docs/UsersGuide.md` の優先度の説明を直す
 
 登録済みの単語は変えない（書き換えで `--priority` を省いたときは今の優先度のまま、も変えない）。
@@ -52,17 +52,17 @@ TODO-022 の改名を先にやる（パスが `~/.config/ccspk/` になるため
 |------|------|------|
 | 見込み | Opus 5.5 / effort medium | main（実装）+ verifier（Sonnet 5.5 / medium） |
 
-- [ ] `pyproject.toml` の `name` と `[project.scripts]`、`src/claudecodespeak/` を `ccspk` にする
+- [x] `pyproject.toml` の `name` と `[project.scripts]`、`src/claudecodespeak/` を `ccspk` にする
   （`git mv`。`hook.py` の `MODULE` も）。`uv.lock` は `uv sync` で作り直す
-- [ ] 実行時のファイル名 `claude-tts`（`hook.py` の `BASE`）を `ccspk` にする
-- [ ] 文書（`README.md`・`CLAUDE.md`・`docs/`・`TODO.md`）とコード中の旧名を直す。
+- [x] 実行時のファイル名 `claude-tts`（`hook.py` の `BASE`）を `ccspk` にする
+- [x] 文書（`README.md`・`CLAUDE.md`・`docs/`・`TODO.md`）とコード中の旧名を直す。
   対象は `rg -n -i -e claudecodespeak -e claude-tts --hidden -g '!.git' -g '!archives'`
-- [ ] `~/.claude/settings.json` のフックのコマンド（2 か所）を `ccspk hook` にし、
+- [x] `~/.claude/settings.json` のフックのコマンド（2 か所）を `ccspk hook` にし、
   `uv tool install .` と `uv tool uninstall claudecodespeak` で入れ替える（Claude がやる）
 - [ ] GitHub のリポジトリを改名し、remote を向け直す（Claude がやる。push はしない）
   - `gh repo rename ccspk -R ytani01/claudecodespeak --yes`
   - `git remote set-url origin git@github.com:ytani01/ccspk.git`
-- [ ] 手元のディレクトリを移すスクリプト `archives/agents/TODO-022/move-dir.sh` を作る。
+- [x] 手元のディレクトリを移すスクリプト `archives/agents/TODO-022/move-dir.sh` を作る。
   Claude Code の作業ディレクトリそのものを移すので、ここだけは Claude Code を終了してから
   利用者が走らせる。スクリプトがやること:
   - 先に確かめて、どれか外れたら何もせず止まる: `~/work/claudecodespeak` がある、

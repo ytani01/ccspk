@@ -3,7 +3,7 @@ revision = 3
 requires-python = ">=3.13"
 
 [[package]]
-name = "claudecodespeak"
+name = "ccspk"
 source = { editable = "." }
 dependencies = [
     { name = "click" },

@@ -1,11 +1,11 @@
-"""VOICEVOX のエンジンのユーザー辞書を操作する（claudecodespeak dict）。
+"""VOICEVOX のエンジンのユーザー辞書を操作する（ccspk dict）。
 
-  claudecodespeak dict add <表記> <読み（カタカナ）> [--accent N] [--type TYPE] [--priority N] [--speak]
-  claudecodespeak dict kana <文>
-  claudecodespeak dict list
-  claudecodespeak dict remove <表記>
-  claudecodespeak dict export [FILE]
-  claudecodespeak dict import [FILE]
+  ccspk dict add <表記> <読み（カタカナ）> [--accent N] [--type TYPE] [--priority N] [--speak]
+  ccspk dict kana <文>
+  ccspk dict list
+  ccspk dict remove <表記>
+  ccspk dict export [FILE]
+  ccspk dict import [FILE]
 
 `add` はアクセントの位置を、読みを /audio_query に渡してエンジンに任せる。
 同じ表記が登録済みなら、読みを書き換える。登録後の読みを表示し、--speak で鳴らす。

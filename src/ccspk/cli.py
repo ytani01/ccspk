@@ -1,4 +1,4 @@
-"""claudecodespeak のエントリポイント。サブコマンド hook・say・status・test・dict をまとめる。"""
+"""ccspk のエントリポイント。サブコマンド hook・say・status・test・dict をまとめる。"""
 
 import click
 

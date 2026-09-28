@@ -2,15 +2,15 @@
 
 ## インストール
 
-リポジトリは `~/work/claudecodespeak` に clone する（下の手順のコマンドは、
-このパスを前提にしている）。コマンド `claudecodespeak` は `uv tool install` でインストールする。
+リポジトリは `~/work/ccspk` に clone する（下の手順のコマンドは、
+このパスを前提にしている）。コマンド `ccspk` は `uv tool install` でインストールする。
 
 ```sh
-git clone git@github.com:ytani01/claudecodespeak.git ~/work/claudecodespeak
-uv tool install ~/work/claudecodespeak
+git clone git@github.com:ytani01/ccspk.git ~/work/ccspk
+uv tool install ~/work/ccspk
 ```
 
-コードを直したら、`uv tool install --reinstall ~/work/claudecodespeak` で再インストールする。
+コードを直したら、`uv tool install --reinstall ~/work/ccspk` で再インストールする。
 
 ### VOICEVOX エンジン
 
@@ -25,7 +25,7 @@ gh release download 0.25.2 -R VOICEVOX/voicevox_engine \
 7z x -o0.25.2 voicevox_engine-linux-cpu-x64-0.25.2.vvpp
 chmod +x 0.25.2/run
 rm voicevox_engine-linux-cpu-x64-0.25.2.vvpp
-systemctl --user link ~/work/claudecodespeak/systemd/voicevox-engine.service
+systemctl --user link ~/work/ccspk/systemd/voicevox-engine.service
 systemctl --user enable --now voicevox-engine.service
 curl -s http://127.0.0.1:50021/version   # "0.25.2" が返れば起動している
 ```
@@ -40,18 +40,18 @@ unit ファイルのパスを揃えて書き換え、`systemctl --user daemon-re
 整形が正しく動くかは、次の自己テストで確認できる。
 
 ```sh
-claudecodespeak test
+ccspk test
 ```
 
 ### Claude Code の設定
 
 `~/.claude/settings.json` の `hooks` に Stop・MessageDisplay・PreToolUse のフックを追加し、
-`env` で `CLAUDE_TTS_SPEAK` を `1` にする。`claudecodespeak` をインストールしていないマシンでは何もしない。
+`env` で `CLAUDE_TTS_SPEAK` を `1` にする。`ccspk` をインストールしていないマシンでは何もしない。
 Stop は返答の最後の文章を、MessageDisplay はツールを呼ぶ前などの途中の文章を読む。
 PreToolUse（matcher `AskUserQuestion`）は、Claude が質問してくるときに質問の文を読む
 （選択肢は読まない）。途中の文章や質問が要らなければ、そのフックは追加しない。
-`claudecodespeak` は `PATH` から探すので、インストールしたのに音が出ないときは、Claude Code を
-起動するシェルで `command -v claudecodespeak` が見つかるかを確認する。
+`ccspk` は `PATH` から探すので、インストールしたのに音が出ないときは、Claude Code を
+起動するシェルで `command -v ccspk` が見つかるかを確認する。
 
 ```json
 "env": {
@@ -63,7 +63,7 @@ PreToolUse（matcher `AskUserQuestion`）は、Claude が質問してくると�
       "hooks": [
         {
           "type": "command",
-          "command": "! command -v claudecodespeak >/dev/null || claudecodespeak hook",
+          "command": "! command -v ccspk >/dev/null || ccspk hook",
           "timeout": 5
         }
       ]
@@ -74,7 +74,7 @@ PreToolUse（matcher `AskUserQuestion`）は、Claude が質問してくると�
       "hooks": [
         {
           "type": "command",
-          "command": "! command -v claudecodespeak >/dev/null || claudecodespeak hook",
+          "command": "! command -v ccspk >/dev/null || ccspk hook",
           "timeout": 5
         }
       ]
@@ -86,7 +86,7 @@ PreToolUse（matcher `AskUserQuestion`）は、Claude が質問してくると�
       "hooks": [
         {
           "type": "command",
-          "command": "! command -v claudecodespeak >/dev/null || claudecodespeak hook",
+          "command": "! command -v ccspk >/dev/null || ccspk hook",
           "timeout": 5
         }
       ]
@@ -108,13 +108,13 @@ PreToolUse（matcher `AskUserQuestion`）は、Claude が質問してくると�
 環境変数 `PIPEWIRE_REMOTE` があるときは、PipeWire は確認しない（`[a,b]` のような
 形も取り、つながる先をフックの側で決めきれないため）。
 
-- `$XDG_RUNTIME_DIR/claude-tts.unusable`
-- `$XDG_RUNTIME_DIR` が無い環境では `/tmp/claude-tts-<uid>.unusable`
+- `$XDG_RUNTIME_DIR/ccspk.unusable`
+- `$XDG_RUNTIME_DIR` が無い環境では `/tmp/ccspk-<uid>.unusable`
 
 理由は `status` で分かる。
 
 ```sh
-claudecodespeak status
+ccspk status
 ```
 
 `$XDG_RUNTIME_DIR` のファイルは、その利用者のセッションが全部終わると消える
@@ -126,15 +126,15 @@ claudecodespeak status
 フックがまた確認する。
 
 ```sh
-claudecodespeak status --clear
+ccspk status --clear
 ```
 
 ## 読み上げの辞書
 
-返答の読み上げ（`claudecodespeak hook`）で読み間違える単語は、VOICEVOX の
+返答の読み上げ（`ccspk hook`）で読み間違える単語は、VOICEVOX の
 エンジンのユーザー辞書で読みを直す。辞書はエンジンの中にあり、書き出したものを
 `voicevox/user_dict.json` としてリポジトリに置いている。登録・一覧・削除・
-書き出し・読み込みは、どれも `claudecodespeak dict` のサブコマンドで行う
+書き出し・読み込みは、どれも `ccspk dict` のサブコマンドで行う
 （`dict export` と `dict import` の例は、リポジトリの直下で走らせる）。
 
 ### 読みを確認する
@@ -142,19 +142,19 @@ claudecodespeak status --clear
 登録する前後に、エンジンがどう読むかを確認する。
 
 ```sh
-claudecodespeak dict kana 'TODO.md を直す'
+ccspk dict kana 'TODO.md を直す'
 ```
 
 `'` の直前の音の後で、音が下がる。
 
 ### 単語を登録する
 
-`claudecodespeak dict add` に表記と読みを渡す。アクセントの位置はエンジンに任せ、
+`ccspk dict add` に表記と読みを渡す。アクセントの位置はエンジンに任せ、
 登録後の読みを表示する。同じ表記が登録済みなら、読みを書き換える（品詞と優先度は、
 指定しなければ今のまま）。
 
 ```sh
-claudecodespeak dict add README リードミー --speak
+ccspk dict add README リードミー --speak
 ```
 
 - `--speak` を付けると、登録後に表記を読み上げる
@@ -175,8 +175,8 @@ claudecodespeak dict add README リードミー --speak
 ### 登録した単語を一覧・削除する
 
 ```sh
-claudecodespeak dict list
-claudecodespeak dict remove README
+ccspk dict list
+ccspk dict remove README
 ```
 
 `dict list` は ID・表記・読み・`accent_type`・優先度を表記順に並べる。読みを変えるときは、
@@ -187,7 +187,7 @@ claudecodespeak dict remove README
 登録や削除をしたら、辞書のファイルを書き出してコミットする。
 
 ```sh
-claudecodespeak dict export voicevox/user_dict.json
+ccspk dict export voicevox/user_dict.json
 ```
 
 ### リポジトリの辞書を読み込む
@@ -195,14 +195,14 @@ claudecodespeak dict export voicevox/user_dict.json
 エンジンを再インストールしたときや、別のマシンでは、辞書のファイルを読み込む。
 
 ```sh
-claudecodespeak dict import voicevox/user_dict.json
+ccspk dict import voicevox/user_dict.json
 ```
 
 同じ ID の単語があれば上書きする。辞書にあってファイルに無い単語は消えずに残る。
 
 ### 記号と数字
 
-辞書で直せないものは、`src/claudecodespeak/hook.py` の `to_speech` で置き換えている。
+辞書で直せないものは、`src/ccspk/hook.py` の `to_speech` で置き換えている。
 
 - 「〜」「～」「→」は「から」にする。前後のスペースも消す（`1 〜 4` → `1から4`）
 - 半角の「~」は、数字に挟まれたときだけ「から」にする（`1~4` → `1から4`）

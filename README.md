@@ -1,4 +1,4 @@
-# claudecodespeak
+# ccspk
 
 Claude Code の返答の冒頭を、手元の VOICEVOX で読み上げるフック。
 
@@ -6,10 +6,10 @@ Claude Code の返答の冒頭を、手元の VOICEVOX で読み上げるフッ�
 
 | ファイル | 中身 |
 |---|---|
-| `pyproject.toml` | コマンド `claudecodespeak` の定義（`uv tool install` で入れる） |
-| `src/claudecodespeak/hook.py` | `claudecodespeak hook`。Stop・MessageDisplay・PreToolUse フック。返答の冒頭と質問の文を VOICEVOX で読み上げる |
-| `src/claudecodespeak/user_dict.py` | `claudecodespeak dict`。VOICEVOX のユーザー辞書を操作する |
-| `src/claudecodespeak/cli.py` | サブコマンドをまとめる |
+| `pyproject.toml` | コマンド `ccspk` の定義（`uv tool install` で入れる） |
+| `src/ccspk/hook.py` | `ccspk hook`。Stop・MessageDisplay・PreToolUse フック。返答の冒頭と質問の文を VOICEVOX で読み上げる |
+| `src/ccspk/user_dict.py` | `ccspk dict`。VOICEVOX のユーザー辞書を操作する |
+| `src/ccspk/cli.py` | サブコマンドをまとめる |
 | `systemd/voicevox-engine.service` | VOICEVOX のエンジンを常駐させる user unit |
 | `voicevox/user_dict.json` | VOICEVOX のユーザー辞書を書き出したもの（読み間違える単語の読み） |
 | `docs/UsersGuide.md` | インストール、Claude Code の設定、読み上げの無効化、読み上げの辞書の扱い方 |
@@ -17,7 +17,7 @@ Claude Code の返答の冒頭を、手元の VOICEVOX で読み上げるフッ�
 
 ## 動き方
 
-`Stop` と `MessageDisplay` のフックで `claudecodespeak hook` が動き、Claude の返答の冒頭を
+`Stop` と `MessageDisplay` のフックで `ccspk hook` が動き、Claude の返答の冒頭を
 VOICEVOX（夜語トバリ・明るい）で読み上げる。`AskUserQuestion` で質問してくるときは、
 `PreToolUse` のフックで質問の文を読む。合成は手元のエンジンで行うので、
 返答が外に送られることはない。
