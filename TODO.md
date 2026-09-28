@@ -1,7 +1,7 @@
 # TODO
 
-**残っている項目: TODO-020、TODO-021。** これまでに 19 件を決着させた。
-新しく足すときは「完了済み」の上に節を作る。**番号は `TODO-022` から。**
+**残っている項目: TODO-020、TODO-021、TODO-022。** これまでに 19 件を決着させた。
+新しく足すときは「完了済み」の上に節を作る。**番号は `TODO-023` から。**
 
 ---
 
@@ -28,7 +28,7 @@
 |------|------|------|
 | 見込み | Opus 5.5 / effort medium | main（実装）+ reviewer（Opus 5.5 / high）+ verifier（Sonnet 5.5 / medium） |
 
-- [ ] 辞書のファイルを `~/.config/claudecodespeak/user_dict.json` とする
+- [ ] 辞書のファイルを `~/.config/ccspk/user_dict.json` とする
   （`$XDG_CONFIG_HOME` があればそちらを使う）
 - [ ] `dict add`・`remove`・`import` が成功したら、エンジンの辞書をこのファイルへ書き出す
   （`export` と同じ形。一時ファイルに書いてから置き換える）
@@ -42,6 +42,31 @@
 消えない。それを直接使わず `~/.config` に別に持つのは、エンジンの版や入れ直しに左右されず、
 表記も半角で読めるようにするため（利用者が決めた。2026-09-29）。
 `import` は上書きと追加だけをする。ファイルに無い単語がエンジンにあっても消さない（今と同じ）。
+TODO-022 の改名を先にやる（パスが `~/.config/ccspk/` になるため）。
+
+---
+
+## TODO-022. コマンド名とリポジトリ名を ccspk にする
+
+|      | main | 担当 |
+|------|------|------|
+| 見込み | Opus 5.5 / effort medium | main（実装）+ verifier（Sonnet 5.5 / medium） |
+
+- [ ] `pyproject.toml` の `name` と `[project.scripts]`、`src/claudecodespeak/` を `ccspk` にする
+  （`git mv`。`hook.py` の `MODULE` も）。`uv.lock` は `uv sync` で作り直す
+- [ ] 実行時のファイル名 `claude-tts`（`hook.py` の `BASE`）を `ccspk` にする
+- [ ] 文書（`README.md`・`CLAUDE.md`・`docs/`・`TODO.md`）とコード中の旧名を直す。
+  対象は `rg -n -i -e claudecodespeak -e claude-tts --hidden -g '!.git' -g '!archives'`
+- [ ] `~/.claude/settings.json` のフックのコマンド（2 か所）を `ccspk hook` にし、
+  `uv tool install .` と `uv tool uninstall claudecodespeak` で入れ替える（Claude がやる）
+- [ ] GitHub の改名、`git remote set-url`、`~/work/claudecodespeak` の改名と
+  systemd の unit の symlink の張り直しは、コマンドを提示して利用者がやる
+
+`archives/` と過去のコミットメッセージの旧名は、記録なので直さない。
+挙動は名前以外変わらないので reviewer は置かない。verifier には、旧名が残っていないこと、
+`ccspk test` が通ること、入れ替えたあとのフックで読み上げが鳴ることを確かめさせる。
+切り替えの瞬間に鳴っている旧名の読み上げは、新しいフックから止められない（`stop_playing()` は
+`MODULE` で見分ける。一度きりなので対処しない）。
 
 ---
 
