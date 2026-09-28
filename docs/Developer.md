@@ -10,7 +10,7 @@ VOICEVOX のエンジン（`127.0.0.1:50021`）、`pw-play`。読み上げの範
 ## 動き方
 
 - 環境変数 `CLAUDE_TTS_SPEAK` が `1` のときだけ鳴る
-- 読み上げるのは整形した先頭 180 文字（30 秒ほど）。超えるときは、文の途中で
+- 読み上げるのは整形した先頭 180 字（30 秒ほど）。超えるときは、文の途中で
   切らないよう、180 字目から 240 字目までで最初の文末まで読む。文末が無ければ
   読点まで、それも無ければ 180 字で切る。コードブロックは
   「コード省略」に置き換え、表・Markdown の記号・リンクの URL は消す
@@ -70,7 +70,7 @@ MessageDisplay フックとして、`AskUserQuestion` を呼ぶ直前に PreTool
 4. 標準入力の JSON を読む。MessageDisplay・PreToolUse で `agent_id` があれば終わる
 5. `LOCK` を取る。ここから先は、同時に来たフックを 1 つずつ通す
 6. MessageDisplay なら、`assemble()` で分を `PARTS` に置く。最後の分とそれより前の分が
-   そろっていなければ終わる。そろったらつなぎ、置いた分を消す。`PARTS_KEEP` 秒より古い分もここで消す
+   そろっていなければ終わる。そろったらつなぎ、置いた分を消す。`PARTS_KEEP` 秒より古い分もここで消す。
    PreToolUse なら、`questions()` で質問の文を改行でつなぐ。`tool_name` が
    `AskUserQuestion` でなければ空にする
 7. `to_speech()` で読み上げる文に整える。MessageDisplay・PreToolUse で空になったら終わる
