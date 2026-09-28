@@ -1,7 +1,7 @@
 # TODO
 
-**残っている項目: TODO-028、TODO-030。** これまでに 28 件を決着させた。
-新しく足すときは「完了済み」の上に節を作る。**番号は `TODO-031` から。**
+**残っている項目: TODO-028、TODO-030、TODO-031。** これまでに 28 件を決着させた。
+新しく足すときは「完了済み」の上に節を作る。**番号は `TODO-032` から。**
 
 ---
 
@@ -46,6 +46,33 @@
 - 英→日（`reviewer の`）と日→英（`同じ reviewer`）の両方向を詰める。英単語同士（`Claude Code`）の空白は残す
 - `split_first` は区切りが 30 字以内に無い文を空白で切っている（最初の音を早めるため）ので、
   `to_speech` では詰めず、`chunks` で切った後に塊ごとに詰める
+
+---
+
+## TODO-031. コードを直したら ccspk を自動で入れ直す
+
+|      | main | 担当 |
+|------|------|------|
+| 見込み | Opus 5.5 / effort medium | main（実装）+ reviewer（Opus 5.5 / high）+ verifier（Sonnet 5.5 / medium） |
+
+- [ ] `.claude/settings.json` に Stop フックを足す。`src/` か `pyproject.toml` が前回のインストールより
+      新しいときだけ、`ccspk test` を走らせ、通ったら `uv tool install --reinstall .` で入れ直す
+- [ ] テストが落ちたら入れ直さず、`systemMessage` で知らせる
+- [ ] CLAUDE.md の「コマンド」か「注意」に、自動で入れ直すことを書く
+
+背景（決めたこと）:
+
+- 返答の終わりに 1 回だけ入れ直す（編集の途中の状態を入れないため）。editable インストールにはしない
+- 設定は `.claude/settings.json`（リポジトリに入れる）。`.claude/settings.local.json` は変えない
+- `--reinstall` を付ける見込み。hatch-vcs の版は未コミットの変更があると日付付きになり、同じ日の
+  2 回目の変更では版が変わらず、`--reinstall` 無しでは入れ直さない可能性がある（UsersGuide.md も
+  `--reinstall` と書いている）。着手時に確かめる
+
+分担:
+
+- 条件（更新の判定・テストの成否）で動きが変わるので reviewer を付ける
+- verifier には、`UV_TOOL_DIR`・`UV_TOOL_BIN_DIR` を一時ディレクトリに向けて、変更なし・変更あり・
+  テスト失敗の 3 通りでフックのコマンドを手で動かし、入れ直したか・知らせたかを確かめさせる
 
 ---
 
