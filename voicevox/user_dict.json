@@ -33,6 +33,23 @@
     "surface": "ｒｅｖｉｅｗｅｒ",
     "yomi": "レビュータントウ"
   },
+  "319adbfd-57d1-4fde-ad24-668e41f3a909": {
+    "accent_associative_rule": "*",
+    "accent_type": 2,
+    "context_id": 1345,
+    "inflectional_form": "*",
+    "inflectional_type": "*",
+    "mora_count": 5,
+    "part_of_speech": "名詞",
+    "part_of_speech_detail_1": "一般",
+    "part_of_speech_detail_2": "*",
+    "part_of_speech_detail_3": "*",
+    "priority": 5,
+    "pronunciation": "カラニナル",
+    "stem": "*",
+    "surface": "空になる",
+    "yomi": "カラニナル"
+  },
   "3a1824ad-c348-4ed1-933b-f5f19427c582": {
     "accent_associative_rule": "*",
     "accent_type": 1,
@@ -84,6 +101,23 @@
     "surface": "ＣＬＡＵＤＥ",
     "yomi": "クロード"
   },
+  "7e83d072-80f9-4150-91a7-521e02d18cfd": {
+    "accent_associative_rule": "*",
+    "accent_type": 2,
+    "context_id": 1345,
+    "inflectional_form": "*",
+    "inflectional_type": "*",
+    "mora_count": 6,
+    "part_of_speech": "名詞",
+    "part_of_speech_detail_1": "一般",
+    "part_of_speech_detail_2": "*",
+    "part_of_speech_detail_3": "*",
+    "priority": 5,
+    "pronunciation": "カラニナッタ",
+    "stem": "*",
+    "surface": "空になった",
+    "yomi": "カラニナッタ"
+  },
   "911f1fc1-26e2-4fbc-832e-2f74adc26b8b": {
     "accent_associative_rule": "*",
     "accent_type": 5,
@@ -117,6 +151,23 @@
     "stem": "*",
     "surface": "ＪＳＯＮ",
     "yomi": "ジェイソン"
+  },
+  "ab1c836b-6f46-43f9-b4cd-468f54385002": {
+    "accent_associative_rule": "*",
+    "accent_type": 2,
+    "context_id": 1345,
+    "inflectional_form": "*",
+    "inflectional_type": "*",
+    "mora_count": 7,
+    "part_of_speech": "名詞",
+    "part_of_speech_detail_1": "一般",
+    "part_of_speech_detail_2": "*",
+    "part_of_speech_detail_3": "*",
+    "priority": 5,
+    "pronunciation": "カラニナラナイ",
+    "stem": "*",
+    "surface": "空にならない",
+    "yomi": "カラニナラナイ"
   },
   "d94404c9-c609-4348-bc9e-a47bc96a5517": {
     "accent_associative_rule": "*",
