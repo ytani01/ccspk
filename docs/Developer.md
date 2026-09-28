@@ -24,8 +24,16 @@ VOICEVOX のエンジン（`127.0.0.1:50021`）、`pw-play`。読み上げの範
   30 字より後ろの区切りで切る。後半が句点だけになる所や、`12:30`・`name()` の
   ような語の中の半角「:」「(」では切らない。切った所は抑揚が文末のように
   下がる。最初の音までは、エンジンが空いていれば 1.2〜2.5 秒ほど
-- 再生中に次の返答が来たら、前の再生を止めて新しいほうを読む
-- サブエージェントの報告では鳴らない（`SubagentStop` は登録していない）
+- 返答の最後の文章に加えて、ツールを呼ぶ前などの途中の文章も読む（`MessageDisplay`）。
+  ただし `MessageDisplay` が起動しない文章があり、それは読まない。起動する条件は分かっていない
+- 再生中に次の文章が来たら、前の再生を止めて新しいほうを読む。途中の文章が続けて来ると、
+  前の文章は冒頭で切れる
+- 読んでから 5 秒のうちに同じ文章が来たら読まない。返答の最後の文章は `MessageDisplay` と
+  `Stop` の両方から（実測では 0.01 秒差で）来るので、2 度読まないため
+- 表だけ・URL だけのように、整えると空になる途中の文章では、前の再生を止めない。
+  `Stop` が空のときは、今までどおり止める
+- サブエージェントの報告では鳴らない（`SubagentStop` は登録せず、`MessageDisplay` も
+  `agent_id` があれば読まない）
 - `pw-play` が無い、エンジンに接続できない、PipeWire が動いていない、のどれかなら
   鳴らさずに終わり、使えないことを覚えて、次からは確かめもせずに終わる。
   戻し方は [UsersGuide.md](UsersGuide.md#使えないと覚えたとき) にある
@@ -34,8 +42,12 @@ VOICEVOX のエンジン（`127.0.0.1:50021`）、`pw-play`。読み上げの範
 
 ### 流れ
 
-Claude Code は返答を終えるたびに Stop フックとしてこのスクリプトを起動し、
-標準入力に JSON を渡す。使うのは `last_assistant_message`（最後の返答の本文）だけ。
+Claude Code は、返答を終えるたびに Stop フックとして、文章を表示するたびに
+MessageDisplay フックとしてこのスクリプトを起動し、標準入力に JSON を渡す。
+使うのは、Stop なら `last_assistant_message`（最後の返答の本文）、MessageDisplay なら
+`message_id`・`index`・`delta`・`final`。MessageDisplay は 1 つの文章を `index` ごとの分
+（`delta`）に分けて渡し、最後の分に `final: true` が付く。フックは並んで走り、後ろの分が
+先に届くこともある。`agent_id` があるとき（サブエージェント）は読まない。
 
 `main()` は引数で 3 つに分かれる。
 
@@ -43,16 +55,21 @@ Claude Code は返答を終えるたびに Stop フックとしてこのスク�
 |---|---|
 | `--test` | `demo()` の自己テストを走らせる |
 | `--play <本文>` | 子プロセスとして、合成と再生をする（`play()`） |
-| 引数なし | Stop フックとして動く（下の順） |
+| 引数なし | フックとして動く（下の順） |
 
-Stop フックとしては、次の順に進む。どこかで条件を満たさなければ、そこで終わる。
+フックとしては、次の順に進む。どこかで条件を満たさなければ、そこで終わる。
 
 1. 環境変数 `CLAUDE_TTS_SPEAK` が `1` か
 2. 使えないと覚えたファイル（`UNUSABLE`）が無いか。あれば確かめもせずに終わる
 3. `unusable()` で鳴らせるかを確かめる。だめなら理由を `UNUSABLE` に書いて終わる
-4. 標準入力の JSON を読み、`to_speech()` で読み上げる文に整える
-5. `stop_playing()` で前の再生を止める
-6. 文が空でなければ、`speak()` で子プロセスを起こし、その PID を `PIDFILE` に書く
+4. 標準入力の JSON を読む。MessageDisplay で `agent_id` があれば終わる
+5. `LOCK` を取る。ここから先は、同時に来たフックを 1 つずつ通す
+6. MessageDisplay なら、`assemble()` で分を `PARTS` に置く。最後の分とそれより前の分が
+   そろっていなければ終わる。そろったらつなぎ、置いた分を消す。`PARTS_KEEP` 秒より古い分もここで消す
+7. `to_speech()` で読み上げる文に整える。MessageDisplay で空になったら終わる
+8. 整えた文が `LAST`（最後に読んだ文）と同じで、書いてから `SAME_WITHIN` 秒のうちなら終わる
+9. `stop_playing()` で前の再生を止める
+10. 文が空でなければ、`LAST` に書き、`speak()` で子プロセスを起こし、その PID を `PIDFILE` に書く
 
 フックはここで終わり、Claude Code を待たせない（登録の `timeout` は 5 秒）。
 合成と再生は子プロセスが受け持つ。
@@ -96,13 +113,16 @@ Stop フックとしては、次の順に進む。どこかで条件を満たさ
 
 ### ファイル
 
-どちらも `$XDG_RUNTIME_DIR` に置く。`$XDG_RUNTIME_DIR` が無い環境では `/tmp` に、
+どれも `$XDG_RUNTIME_DIR` に置く。`$XDG_RUNTIME_DIR` が無い環境では `/tmp` に、
 利用者の uid を名前に入れて置く。
 
 | 定数 | 場所 | 中身 |
 |---|---|---|
 | `PIDFILE` | `claude-tts.pid`（`/tmp/claude-tts-<uid>.pid`） | 再生中の子プロセスの PID |
 | `UNUSABLE` | `claude-tts.unusable`（`/tmp/claude-tts-<uid>.unusable`） | 鳴らせない理由 |
+| `LAST` | `claude-tts.last`（`/tmp/claude-tts-<uid>.last`） | 最後に読んだ文（整えた後） |
+| `LOCK` | `claude-tts.lock`（`/tmp/claude-tts-<uid>.lock`） | 同時に来たフックを 1 つずつ通すためのロック |
+| `PARTS` | `claude-tts.parts/`（`/tmp/claude-tts-<uid>.parts/`） | MessageDisplay の分。`<message_id>.<index>` と、最後の分の番号を書いた `<message_id>.final` |
 
 ### 整形と分割
 
@@ -144,6 +164,7 @@ python3 hooks/speak-response.py --test
 python3 voicevox/add-word.py --test   # アクセントの位置の決め方（accent_of）
 ```
 
+MessageDisplay の分をつなぐ `assemble()` も、一時ディレクトリで確かめている。
 整形や分割を変えたら、`demo()` に例を足す。`unusable()` と `main()` の分岐は
 環境に依るので、`demo()` では確かめていない。下の手順で手で確かめる。
 
@@ -166,7 +187,12 @@ find $tmp -type f
 rm -r $tmp
 ```
 
-使えると判定して子プロセスを起こせば、`$tmp/claude-tts.pid` だけができる。
+使えると判定して子プロセスを起こせば、`$tmp/claude-tts.pid`・`$tmp/claude-tts.last`・
+`$tmp/claude-tts.lock` ができる。MessageDisplay として試すなら、
+`{"hook_event_name":"MessageDisplay","message_id":"m1","index":0,"final":true,"delta":"…"}` を渡す
+（`$tmp/claude-tts.parts/` もできる）。5 秒のうちに同じ文を渡すと、`claude-tts.pid` の PID は
+変わらない（2 度読まない）。JSON に `\n` を入れるときは、zsh の `echo` は改行に変えてしまうので
+`printf '%s'` で渡す。
 使えないと判定したときは、`$tmp/claude-tts.unusable` ができ、中身が理由になる。
 
 `pw-play` が無いときを再現するなら、別の一時ディレクトリで、`PATH` を空にする。

@@ -1,12 +1,12 @@
 # claudecodespeak
 
-Claude Code の返答の冒頭を、手元の VOICEVOX で読み上げる Stop フック。
+Claude Code の返答の冒頭を、手元の VOICEVOX で読み上げるフック。
 
 ## ファイル
 
 | ファイル | 中身 |
 |---|---|
-| `hooks/speak-response.py` | Stop フック。返答の冒頭を VOICEVOX で読み上げる |
+| `hooks/speak-response.py` | Stop・MessageDisplay フック。返答の冒頭を VOICEVOX で読み上げる |
 | `systemd/voicevox-engine.service` | VOICEVOX のエンジンを常駐させる user unit |
 | `voicevox/user_dict.json` | VOICEVOX のユーザー辞書の元（読み間違える語の読み） |
 | `voicevox/add-word.py` | VOICEVOX のユーザー辞書に語を足す |
@@ -15,7 +15,7 @@ Claude Code の返答の冒頭を、手元の VOICEVOX で読み上げる Stop �
 
 ## 動き方
 
-`Stop` フックで `hooks/speak-response.py` が動き、Claude の返答の冒頭を
+`Stop` と `MessageDisplay` のフックで `hooks/speak-response.py` が動き、Claude の返答の冒頭を
 VOICEVOX（夜語トバリ・明るい）で読み上げる。合成は手元のエンジンで行うので、
 返答が外に送られることはない。
 
@@ -23,7 +23,7 @@ VOICEVOX（夜語トバリ・明るい）で読み上げる。合成は手元の
 - 読むのは冒頭の 180 字ほど。なるべく文末で切り、コードブロックは「コード省略」と読み、表は飛ばす
 - 1 文目ができたらすぐ鳴らし、残りは鳴らしている間に合成する
 - 読み間違えやすい記号・数字・語は、置き換えとエンジンの辞書で直す
-- 再生中に次の返答が来たら、前の再生を止めて新しいほうを読む
+- ツールを呼ぶ前などの途中の文章も読む。再生中に次の文章が来たら、前の再生を止めて新しいほうを読む
 - 鳴らせない環境では、使えないことを覚えて、次からは確かめもせずに終わる
 
 細かい決まりは [docs/Developer.md](docs/Developer.md#動き方)、辞書と

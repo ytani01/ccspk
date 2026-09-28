@@ -4,6 +4,7 @@
 作り直すので、手で直さない。やらないと決めたものは（対応しない）が付いている。
 進行中の項目は [TODO.md](../TODO.md) にある。
 
+- [TODO-010. Stop 以外に、途中の報告の文章も読み上げる](todo/TODO-010.%20Stop%20%E4%BB%A5%E5%A4%96%E3%81%AB%E3%80%81%E9%80%94%E4%B8%AD%E3%81%AE%E5%A0%B1%E5%91%8A%E3%81%AE%E6%96%87%E7%AB%A0%E3%82%82%E8%AA%AD%E3%81%BF%E4%B8%8A%E3%81%92%E3%82%8B.md)
 - [TODO-009. VOICEVOX の辞書に語を簡単に足す CLI を作る](todo/TODO-009.%20VOICEVOX%20%E3%81%AE%E8%BE%9E%E6%9B%B8%E3%81%AB%E8%AA%9E%E3%82%92%E7%B0%A1%E5%8D%98%E3%81%AB%E8%B6%B3%E3%81%99%20CLI%20%E3%82%92%E4%BD%9C%E3%82%8B.md)
 - [TODO-008. 「動き方」の詳細を Developer.md へ移す](todo/TODO-008.%20%E3%80%8C%E5%8B%95%E3%81%8D%E6%96%B9%E3%80%8D%E3%81%AE%E8%A9%B3%E7%B4%B0%E3%82%92%20Developer.md%20%E3%81%B8%E7%A7%BB%E3%81%99.md)
 - [TODO-007. 開発者用の文書 Developer.md を作る](todo/TODO-007.%20%E9%96%8B%E7%99%BA%E8%80%85%E7%94%A8%E3%81%AE%E6%96%87%E6%9B%B8%20Developer.md%20%E3%82%92%E4%BD%9C%E3%82%8B.md)

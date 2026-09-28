@@ -42,8 +42,10 @@ python3 ~/work/claudecodespeak/hooks/speak-response.py --test
 
 ### Claude Code のフック
 
-`~/.claude/settings.json` の `hooks` に Stop フックを足し、`env` で
-`CLAUDE_TTS_SPEAK` を `1` にする。clone していないマシンでは何もしない。
+`~/.claude/settings.json` の `hooks` に Stop フックと MessageDisplay フックを足し、
+`env` で `CLAUDE_TTS_SPEAK` を `1` にする。clone していないマシンでは何もしない。
+Stop は返答の最後の文章を、MessageDisplay はツールを呼ぶ前などの途中の文章を読む。
+途中の文章が要らなければ、MessageDisplay は足さない。
 
 ```json
 "env": {
@@ -51,6 +53,17 @@ python3 ~/work/claudecodespeak/hooks/speak-response.py --test
 },
 "hooks": {
   "Stop": [
+    {
+      "hooks": [
+        {
+          "type": "command",
+          "command": "f=\"$HOME/work/claudecodespeak/hooks/speak-response.py\"; [ ! -f \"$f\" ] || python3 \"$f\"",
+          "timeout": 5
+        }
+      ]
+    }
+  ],
+  "MessageDisplay": [
     {
       "hooks": [
         {

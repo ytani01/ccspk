@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
-"""Stop hook: Claude の最後の返答を VOICEVOX で読み上げる。
+"""Stop / MessageDisplay hook: Claude の返答を VOICEVOX で読み上げる。
 
+Stop では最後の返答を、MessageDisplay ではツールを呼ぶ前などの途中の文章を読む。
 環境変数 CLAUDE_TTS_SPEAK が 1 のときだけ鳴らす。
 再生中に次の返答が来たら、前の再生を止めてから読む。
 pw-play が無い、エンジンに接続できない、PipeWire が動いていない、のどれかなら
 鳴らさずに終わり、理由を UNUSABLE に書いて覚える。ファイルがあるあいだは確かめもせずに終わる。
 """
 
+import fcntl
 import json
 import os
 import queue
@@ -16,7 +18,9 @@ import signal
 import socket
 import subprocess
 import sys
+import tempfile
 import threading
+import time
 import urllib.parse
 import urllib.request
 from pathlib import Path
@@ -41,6 +45,16 @@ BASE = Path(RUNTIME, "claude-tts") if RUNTIME else Path(f"/tmp/claude-tts-{os.ge
 PIDFILE = BASE.with_suffix(".pid")
 # 使えないと分かった理由。$XDG_RUNTIME_DIR ならセッションが全部終わるまで、/tmp なら再起動まで残る
 UNUSABLE = BASE.with_suffix(".unusable")
+# 最後に読んだ文。返答の最後の文章は MessageDisplay と Stop の両方から来るので、2 度読まない
+LAST = BASE.with_suffix(".last")
+LOCK = BASE.with_suffix(".lock")  # フックは並んで走るので、PARTS と LAST を触るあいだは 1 つずつ通す
+# MessageDisplay は 1 つの文章を index ごとに分けて渡し、最後の分に final が付く。
+# フックは並んで走り、後ろの分が先に届くこともあるので、分けてここに置き、そろったらつなぐ
+PARTS = BASE.with_suffix(".parts")
+PARTS_KEEP = 600  # そろわないまま残った分は、この秒数で消す
+# 読んでからこの秒数のうちに同じ文が来たら読まない。MessageDisplay と Stop は 0.01 秒差で来た。
+# 長くすると、続けて同じ返答（「はい。」など）が来たときに黙ってしまう
+SAME_WITHIN = 5
 
 
 def unusable():
@@ -114,6 +128,35 @@ def stop_playing():
         os.killpg(pid, signal.SIGTERM)
     except (OSError, ValueError):
         pass
+
+
+def assemble(payload):
+    """MessageDisplay の分を置き、全部そろったら 1 つにつないで返す。そろうまでは None。
+
+    LOCK を取ってから呼ぶ。そろわないまま PARTS_KEEP 秒たった分は消す。
+    """
+    mid, index, delta = payload.get("message_id"), payload.get("index"), payload.get("delta") or ""
+    if not mid or not isinstance(index, int):
+        return None
+    PARTS.mkdir(exist_ok=True)
+    for q in PARTS.iterdir():
+        if time.time() - q.stat().st_mtime > PARTS_KEEP:
+            q.unlink(missing_ok=True)
+    Path(PARTS, f"{mid}.{index}").write_text(delta)
+    final = Path(PARTS, f"{mid}.final")
+    if payload.get("final"):
+        final.write_text(str(index))
+    try:
+        last = int(final.read_text())
+        parts = [Path(PARTS, f"{mid}.{i}") for i in range(last + 1)]
+    except (OSError, ValueError):
+        return None
+    if not all(q.exists() for q in parts):
+        return None
+    text = "".join(q.read_text() for q in parts)
+    for q in [*parts, final]:
+        q.unlink(missing_ok=True)
+    return text
 
 
 def sentences(text):
@@ -285,6 +328,28 @@ def demo():
     assert chunks("見直しが終わったので、確かめてください。二つ目の文ですが、ここは切らない。") == [
         "見直しが終わったので、", "確かめてください。", "二つ目の文ですが、ここは切らない。"]
     assert chunks("") == []
+
+    # MessageDisplay の分をつなぐ。後ろの分が先に来ても、そろうまでは None
+    global PARTS
+    saved, PARTS = PARTS, Path(tempfile.mkdtemp(), "parts")
+    try:
+        def part(mid, index, delta, final=False):
+            return assemble({"message_id": mid, "index": index, "delta": delta, "final": final})
+
+        assert part("a", 1, "後半。", final=True) is None
+        assert part("a", 0, "前半。\n\n") == "前半。\n\n後半。"
+        assert list(PARTS.iterdir()) == []  # つないだ分は消す
+        assert part("b", 0, "1 つだけ。", final=True) == "1 つだけ。"
+        assert part("c", 0, "途中。") is None
+        assert part("d", 2, "抜けがある。", final=True) is None  # 1 が来ていない
+        assert assemble({"index": 0, "delta": "ID が無い。", "final": True}) is None
+        old = Path(PARTS, "c.0")
+        os.utime(old, (0, 0))
+        part("e", 0, "次の文。")
+        assert not old.exists()  # 古い分は消す
+    finally:
+        shutil.rmtree(PARTS.parent)
+        PARTS = saved
     print("ok")
 
 
@@ -307,10 +372,42 @@ def main():
         payload = json.load(sys.stdin)
     except (json.JSONDecodeError, OSError):
         return
-    text = to_speech(payload.get("last_assistant_message") or "")
-    stop_playing()
-    if text:
-        speak(text)
+    display = payload.get("hook_event_name") == "MessageDisplay"
+    if display and payload.get("agent_id"):
+        return
+    try:
+        lock = open(LOCK, "w")
+        fcntl.flock(lock, fcntl.LOCK_EX)
+    except OSError:
+        lock = None
+    try:
+        if display:
+            try:
+                raw = assemble(payload)
+            except OSError:
+                return
+            if raw is None:
+                return
+        else:
+            raw = payload.get("last_assistant_message") or ""
+        text = to_speech(raw)
+        if display and not text:
+            return  # 表だけの途中の文章などで、読んでいる返答を止めない
+        try:
+            if text and LAST.read_text() == text and time.time() - LAST.stat().st_mtime < SAME_WITHIN:
+                return
+        except OSError:
+            pass
+        stop_playing()
+        if text:
+            try:
+                LAST.write_text(text)
+            except OSError:
+                pass
+            speak(text)
+    finally:
+        if lock:
+            lock.close()
 
 
 if __name__ == "__main__":
