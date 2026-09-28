@@ -155,10 +155,13 @@ MessageDisplay フックとして、`AskUserQuestion` を呼ぶ直前に PreTool
 | `COMMAS` | `、，` | 読点。半角の `,` は `1,000` のように数字の中にも出るので入れない |
 | `SPEAKER` | 119 | 話者（夜語トバリ・明るい） |
 | `ENGINE` | `http://127.0.0.1:50021` | エンジンの URL |
-| `PLAY` | `--play` | 子プロセスの目印。`stop_playing()` がこれで見分ける |
+| `PLAY` | `--play` | 子プロセスの目印。`stop_playing()` は `MODULE` と合わせて見分ける |
+| `MODULE` | `claudecodespeak.hook` | 子プロセスが `python -m` で起こすモジュール。`stop_playing()` の目印にもなる |
 | `CUT` | 正規表現 | 1 文目を切る区切り |
 | `CUT_MIN` | 8 | これより手前では切らない |
 | `SPACE_WITHIN` | 30 | この字数までに `CUT` が無いときだけ、スペースで切る |
+| `PARTS_KEEP` | 600 | そろわないまま残った MessageDisplay の分は、この秒数で消す |
+| `SAME_WITHIN` | 5 | 読んでからこの秒数のうちに同じ文が来たら読まない。長くすると、続けて同じ返答（「はい。」など）が来たときに黙ってしまう |
 
 ## テストと動作の確かめ方
 
