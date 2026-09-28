@@ -1,11 +1,23 @@
 # 開発者向け
 
-コードは `src/ccspk/` にあり、コマンド `ccspk` のサブコマンドに分かれる
-（`cli.py` がまとめる）。フックは `hook.py`（`ccspk hook`・`say`・`stop`・`status`）、
-辞書を操作するのは `user_dict.py`（`ccspk dict`）。依存は click、loguru、
-VOICEVOX のエンジン（`127.0.0.1:50021`）、`pw-play`。読み上げの範囲や切り方など、
-利用者から見た動きは下の「動き方」、インストールと辞書は
+依存は click、loguru、VOICEVOX のエンジン（`127.0.0.1:50021`）、`pw-play`。
+読み上げの範囲や切り方など、利用者から見た動きは下の「動き方」、インストールと辞書は
 [UsersGuide](UsersGuide.md) にある。
+
+## ファイル
+
+コードは `src/ccspk/` にあり、コマンド `ccspk` のサブコマンドに分かれる。
+
+| ファイル | 中身 |
+|---|---|
+| `pyproject.toml` | コマンド `ccspk` の定義（`uv tool install` で入れる） |
+| `src/ccspk/cli.py` | サブコマンドをまとめる。`ccspk test` もここにある |
+| `src/ccspk/hook.py` | `ccspk hook`・`say`・`stop`・`status`。Stop・MessageDisplay・PreToolUse フックとして、返答の冒頭と質問の文を VOICEVOX で読み上げる |
+| `src/ccspk/user_dict.py` | `ccspk dict`。VOICEVOX のユーザー辞書を操作する |
+| `src/ccspk/__init__.py` | `__version__`（`--version` で出す版） |
+| `src/ccspk/click_utils.py` | `--debug`・`--version` などの共通オプション |
+| `src/ccspk/mylog.py` | loguru のログの設定 |
+| `systemd/voicevox-engine.service` | VOICEVOX のエンジンを常駐させる user unit。起動のたびに辞書を読み込む |
 
 ## 動き方
 
@@ -14,8 +26,7 @@ VOICEVOX のエンジン（`127.0.0.1:50021`）、`pw-play`。読み上げの範
   切らないよう、180 字目から 240 字目までで最初の文末まで読む。文末が無ければ
   読点まで、それも無ければ 180 字で切る。コードブロックは
   「コード省略」に置き換え、表・Markdown の記号・リンクの URL は消す
-- 読み間違いを減らすため、「〜」「→」などを「から」に置き換え、数字の後に
-  日本語が続くときは間のスペースを消す。単語の読みはエンジンの辞書で直す。どちらも
+- 読み間違いを減らすため、記号と数字は置き換え、単語の読みはエンジンの辞書で直す。どちらも
   [UsersGuide.md](UsersGuide.md#読み上げの辞書) にある
 - 文ごとに合成し、1 文目ができたらすぐ鳴らす。2 文目以降は鳴らしている
   間に合成する。短い文の直後に長い文が来ると、継ぎ目で数秒待つことがある
@@ -38,8 +49,8 @@ VOICEVOX のエンジン（`127.0.0.1:50021`）、`pw-play`。読み上げの範
   `Stop` が空のときは、今までどおり止める
 - サブエージェントの報告や質問では鳴らない（`SubagentStop` は登録せず、`MessageDisplay` と
   `PreToolUse` も `agent_id` があれば読まない）
-- `pw-play` が無い、エンジンに接続できない、PipeWire が動いていない、のどれかなら
-  鳴らさずに終わり、使えないことを覚えて、次からは確かめもせずに終わる。
+- 鳴らせないとき（条件は下の [「鳴らせるかを確かめる」](#鳴らせるかを確かめる)）は、鳴らさずに終わり、
+  使えないことを覚えて、次からは確かめもせずに終わる。
   戻し方は [UsersGuide.md](UsersGuide.md#読み上げが止まったままのとき) にある
 
 ## フックの仕組み
@@ -122,7 +133,7 @@ MessageDisplay フックとして、`AskUserQuestion` を呼ぶ直前に PreTool
 
 使えるときは、3 つ合わせて 1 ms ほどで終わる。
 
-### ファイル
+### 実行時のファイル
 
 どれも `$XDG_RUNTIME_DIR` に置く。`$XDG_RUNTIME_DIR` が無い環境では `/tmp` に、
 利用者の uid を名前に入れて置く。
@@ -262,3 +273,9 @@ PY
 ```
 
 目安は [「動き方」](#動き方) にある。
+
+## TODO の番号
+
+TODO-001〜006 は、`~/.claude`（dotfiles-claude）から分けたときに付け替えた。
+`archives/todo/` の各ファイルに旧番号を書いてある。分ける前のコミット
+（`a1a9b44` より前）のメッセージは旧番号のまま。

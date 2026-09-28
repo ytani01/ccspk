@@ -23,4 +23,4 @@ uv tool install .         # 利用者の環境へ入れる
 - 辞書はリポジトリに置かない。`dict add`・`remove`・`import` が `~/.config/ccspk/user_dict.json` へ
   書き出し、エンジンの起動時に読み込む（`docs/UsersGuide.md` の「辞書のファイル」）。
   試すときは `XDG_CONFIG_HOME` を一時ディレクトリに向ける
-- git のコミットメッセージにある TODO の番号は旧番号（`README.md` の「TODO の番号」）
+- `~/.claude` から分ける前のコミットメッセージにある TODO の番号は旧番号（`docs/Developer.md` の「TODO の番号」）
