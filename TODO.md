@@ -55,6 +55,8 @@ TODO-022 の改名を先にやる（パスが `~/.config/ccspk/` になるため
 - [x] `pyproject.toml` の `name` と `[project.scripts]`、`src/claudecodespeak/` を `ccspk` にする
   （`git mv`。`hook.py` の `MODULE` も）。`uv.lock` は `uv sync` で作り直す
 - [x] 実行時のファイル名 `claude-tts`（`hook.py` の `BASE`）を `ccspk` にする
+- [x] 環境変数 `CLAUDE_TTS_SPEAK` を `CCSPK_SPEAK` にする（`~/.claude/settings.json` の `env` も。
+  verifier が見つけ、利用者が決めた。2026-09-29）
 - [x] 文書（`README.md`・`CLAUDE.md`・`docs/`・`TODO.md`）とコード中の旧名を直す。
   対象は `rg -n -i -e claudecodespeak -e claude-tts --hidden -g '!.git' -g '!archives'`
 - [x] `~/.claude/settings.json` のフックのコマンド（2 か所）を `ccspk hook` にし、

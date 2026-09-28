@@ -2,7 +2,7 @@
 
 Stop では最後の返答を、MessageDisplay ではツールを呼ぶ前などの途中の文章を、
 PreToolUse（AskUserQuestion）では質問の文を読む。
-環境変数 CLAUDE_TTS_SPEAK が 1 のときだけ鳴らす。
+環境変数 CCSPK_SPEAK が 1 のときだけ鳴らす。
 再生中に次の返答が来たら、前の再生を止めてから読む。
 pw-play が無い、エンジンに接続できない、PipeWire が動いていない、のどれかなら
 鳴らさずに終わり、理由を UNUSABLE に書いて覚える。ファイルがあるあいだは確かめもせずに終わる。
@@ -293,7 +293,7 @@ def demo():
     assert to_speech(a * (LIMIT + 5) + "。いう") == a * (LIMIT + 5) + "。"
     assert to_speech("```\nonly code\n```") == "コード省略。"
     assert to_speech("") == ""
-    assert to_speech("CLAUDE_TTS_SPEAK を足す") == "CLAUDE TTS SPEAK を足す"
+    assert to_speech("CCSPK_SPEAK を足す") == "CCSPK SPEAK を足す"
     assert to_speech("説明\n```python\nsecret()\n") == "説明 コード省略。"
     assert to_speech("前\n~~~\ncode\n~~~\n後") == "前 コード省略。 後"
     # 記号の置き換えと、数字の直後のスペース
@@ -385,7 +385,7 @@ def demo():
 @click.command()
 def main():
     """Stop・MessageDisplay・PreToolUse フック。標準入力のフックの入力を読み、返答の冒頭を読み上げる。"""
-    if os.environ.get("CLAUDE_TTS_SPEAK") != "1" or UNUSABLE.exists():
+    if os.environ.get("CCSPK_SPEAK") != "1" or UNUSABLE.exists():
         return
     if reason := unusable():
         try:

@@ -17,3 +17,12 @@
 5. 前提外れ: HOME/work/ccspk を先に作って実行。「... work/ccspk が既にある」を出して rc=1。実行前後の find の diff が空。calls.log なし（偽コマンドは呼ばれていない）。他の 2 つの前提（旧ディレクトリなし、NEW_PROJ あり）は試していない。
 
 git status: 変更は CLAUDE.md, README.md, TODO.md, docs/*, pyproject.toml, uv.lock, src の git mv、archives/agents/TODO-022/。指示の範囲内。
+
+## 追加の確認（CCSPK_SPEAK）
+
+1. 旧名の rg: TODO.md 58 行（TODO-022 節）だけ。他になし。settings.json の env は `"CCSPK_SPEAK": "1"`（10 行）、CLAUDE_TTS なし。
+2. `uv run ccspk test`: `ok` `ok`、rc=0。
+3. フック（一時 XDG_RUNTIME_DIR、`~/.local/bin/ccspk hook`、各 1 回）:
+   - CCSPK_SPEAK=1: rc=0、ccspk.pid / ccspk.last / ccspk.lock ができた。
+   - CLAUDE_TTS_SPEAK=1 のみ（CCSPK_SPEAK は unset）: rc=0、ファイルなし（鳴らない）。
+   - 音が鳴ったかは聞いていない。

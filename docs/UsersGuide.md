@@ -46,7 +46,7 @@ ccspk test
 ### Claude Code の設定
 
 `~/.claude/settings.json` の `hooks` に Stop・MessageDisplay・PreToolUse のフックを追加し、
-`env` で `CLAUDE_TTS_SPEAK` を `1` にする。`ccspk` をインストールしていないマシンでは何もしない。
+`env` で `CCSPK_SPEAK` を `1` にする。`ccspk` をインストールしていないマシンでは何もしない。
 Stop は返答の最後の文章を、MessageDisplay はツールを呼ぶ前などの途中の文章を読む。
 PreToolUse（matcher `AskUserQuestion`）は、Claude が質問してくるときに質問の文を読む
 （選択肢は読まない）。途中の文章や質問が要らなければ、そのフックは追加しない。
@@ -55,7 +55,7 @@ PreToolUse（matcher `AskUserQuestion`）は、Claude が質問してくると�
 
 ```json
 "env": {
-  "CLAUDE_TTS_SPEAK": "1"
+  "CCSPK_SPEAK": "1"
 },
 "hooks": {
   "Stop": [
@@ -97,7 +97,7 @@ PreToolUse（matcher `AskUserQuestion`）は、Claude が質問してくると�
 
 ### 読み上げを無効にする
 
-`env` の `CLAUDE_TTS_SPEAK` の行を消す。フックの登録は残してよい
+`env` の `CCSPK_SPEAK` の行を消す。フックの登録は残してよい
 （何もせずに終わる）。
 
 ### 読み上げが止まったままのとき

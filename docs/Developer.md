@@ -9,7 +9,7 @@ VOICEVOX のエンジン（`127.0.0.1:50021`）、`pw-play`。読み上げの範
 
 ## 動き方
 
-- 環境変数 `CLAUDE_TTS_SPEAK` が `1` のときだけ鳴る
+- 環境変数 `CCSPK_SPEAK` が `1` のときだけ鳴る
 - 読み上げるのは整形した先頭 180 字（30 秒ほど）。超えるときは、文の途中で
   切らないよう、180 字目から 240 字目までで最初の文末まで読む。文末が無ければ
   読点まで、それも無ければ 180 字で切る。コードブロックは
@@ -65,7 +65,7 @@ MessageDisplay フックとして、`AskUserQuestion` を呼ぶ直前に PreTool
 `hook.py` の `main()`（`ccspk hook`）は、フックとして次の順に進む。
 どこかで条件を満たさなければ、そこで終わる。
 
-1. 環境変数 `CLAUDE_TTS_SPEAK` が `1` か
+1. 環境変数 `CCSPK_SPEAK` が `1` か
 2. 使えないと覚えたファイル（`UNUSABLE`）が無いか。あれば確かめもせずに終わる
 3. `unusable()` で鳴らせるかを確かめる。だめなら理由を `UNUSABLE` に書いて終わる
 4. 標準入力の JSON を読む。MessageDisplay・PreToolUse で `agent_id` があれば終わる
@@ -197,7 +197,7 @@ PreToolUse の質問の文を取り出す `questions()` も確かめている。
 ```sh
 tmp=$(mktemp -d)
 echo '{"last_assistant_message":"確認です。二つ目の文です。"}' \
-  | CLAUDE_TTS_SPEAK=1 XDG_RUNTIME_DIR=$tmp PIPEWIRE_RUNTIME_DIR=/run/user/$(id -u) \
+  | CCSPK_SPEAK=1 XDG_RUNTIME_DIR=$tmp PIPEWIRE_RUNTIME_DIR=/run/user/$(id -u) \
     .venv/bin/ccspk hook
 find $tmp -type f
 rm -r $tmp
@@ -218,7 +218,7 @@ rm -r $tmp
 ```sh
 tmp=$(mktemp -d)
 echo '{"last_assistant_message":"確認です。"}' \
-  | CLAUDE_TTS_SPEAK=1 XDG_RUNTIME_DIR=$tmp PATH=/nonexistent .venv/bin/ccspk hook
+  | CCSPK_SPEAK=1 XDG_RUNTIME_DIR=$tmp PATH=/nonexistent .venv/bin/ccspk hook
 XDG_RUNTIME_DIR=$tmp .venv/bin/ccspk status   # pw-play が無い
 rm -r $tmp
 ```
@@ -242,7 +242,7 @@ import json, os, subprocess, tempfile, time
 from pathlib import Path
 
 tmp = tempfile.mkdtemp()
-env = {**os.environ, "CLAUDE_TTS_SPEAK": "1", "XDG_RUNTIME_DIR": tmp,
+env = {**os.environ, "CCSPK_SPEAK": "1", "XDG_RUNTIME_DIR": tmp,
        "PIPEWIRE_RUNTIME_DIR": f"/run/user/{os.getuid()}"}
 t0 = time.monotonic()
 subprocess.run([".venv/bin/ccspk", "hook"], text=True, env=env, check=True,
