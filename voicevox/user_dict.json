@@ -458,6 +458,23 @@
     "surface": "ｈｙｐｒｗｈｓｐｒ",
     "yomi": "ハイパーウィスパー"
   },
+  "ef19eecf-860a-4a75-b454-4b0d40f925a6": {
+    "accent_associative_rule": "*",
+    "accent_type": 0,
+    "context_id": 1348,
+    "inflectional_form": "*",
+    "inflectional_type": "*",
+    "mora_count": 1,
+    "part_of_speech": "名詞",
+    "part_of_speech_detail_1": "固有名詞",
+    "part_of_speech_detail_2": "一般",
+    "part_of_speech_detail_3": "*",
+    "priority": 7,
+    "pronunciation": "ゴ",
+    "stem": "*",
+    "surface": "語",
+    "yomi": "ゴ"
+  },
   "f03fbba1-1a1b-4e9d-bcfb-bf401c60b744": {
     "accent_associative_rule": "*",
     "accent_type": 3,
