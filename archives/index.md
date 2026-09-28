@@ -4,6 +4,7 @@
 作り直すので、手で直さない。やらないと決めたものは（対応しない）が付いている。
 進行中の項目は [TODO.md](../TODO.md) にある。
 
+- [TODO-019. dict list に優先度を表示する](todo/TODO-019.%20dict%20list%20%E3%81%AB%E5%84%AA%E5%85%88%E5%BA%A6%E3%82%92%E8%A1%A8%E7%A4%BA%E3%81%99%E3%82%8B.md)
 - [TODO-018. 辞書の表記を半角で表示・書き出す](todo/TODO-018.%20%E8%BE%9E%E6%9B%B8%E3%81%AE%E8%A1%A8%E8%A8%98%E3%82%92%E5%8D%8A%E8%A7%92%E3%81%A7%E8%A1%A8%E7%A4%BA%E3%83%BB%E6%9B%B8%E3%81%8D%E5%87%BA%E3%81%99.md)
 - [TODO-017. 辞書の 1 件を「語」でなく「単語」と書く](todo/TODO-017.%20%E8%BE%9E%E6%9B%B8%E3%81%AE%201%20%E4%BB%B6%E3%82%92%E3%80%8C%E8%AA%9E%E3%80%8D%E3%81%A7%E3%81%AA%E3%81%8F%E3%80%8C%E5%8D%98%E8%AA%9E%E3%80%8D%E3%81%A8%E6%9B%B8%E3%81%8F.md)
 - [TODO-016. dict add に --priority を足す](todo/TODO-016.%20dict%20add%20%E3%81%AB%20--priority%20%E3%82%92%E8%B6%B3%E3%81%99.md)

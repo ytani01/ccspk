@@ -149,10 +149,10 @@ def kana(text):
 
 @dict_group.command("list")
 def list_():
-    """登録した単語を、表記順に 1 単語 1 行で一覧する（ID・表記・読み・accent_type）。"""
+    """登録した単語を、表記順に 1 単語 1 行で一覧する（ID・表記・読み・accent_type・優先度）。"""
     words = json.loads(call("GET", "/user_dict"))
     for uuid, w in sorted(words.items(), key=lambda kv: halfwidth(kv[1]["surface"])):
-        print(f"{uuid}  {halfwidth(w['surface'])}  {w['pronunciation']}  {w['accent_type']}")
+        print(f"{uuid}  {halfwidth(w['surface'])}  {w['pronunciation']}  {w['accent_type']}  {w['priority']}")
 
 
 @dict_group.command("remove")

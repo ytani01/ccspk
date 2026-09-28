@@ -179,7 +179,7 @@ claudecodespeak dict list
 claudecodespeak dict remove README
 ```
 
-`dict list` は ID・表記・読み・`accent_type` を表記順に並べる。読みを変えるときは、
+`dict list` は ID・表記・読み・`accent_type`・優先度を表記順に並べる。読みを変えるときは、
 `dict add` に同じ表記で渡す。
 
 ### 辞書をリポジトリに保存する
