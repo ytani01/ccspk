@@ -61,7 +61,7 @@ TODO-022 の改名を先にやる（パスが `~/.config/ccspk/` になるため
   対象は `rg -n -i -e claudecodespeak -e claude-tts --hidden -g '!.git' -g '!archives'`
 - [x] `~/.claude/settings.json` のフックのコマンド（2 か所）を `ccspk hook` にし、
   `uv tool install .` と `uv tool uninstall claudecodespeak` で入れ替える（Claude がやる）
-- [ ] GitHub のリポジトリを改名し、remote を向け直す（Claude がやる。push はしない）
+- [x] GitHub のリポジトリを改名し、remote を向け直す（Claude がやる。push はしない）
   - `gh repo rename ccspk -R ytani01/claudecodespeak --yes`
   - `git remote set-url origin git@github.com:ytani01/ccspk.git`
 - [x] 手元のディレクトリを移すスクリプト `archives/agents/TODO-022/move-dir.sh` を作る。
