@@ -11,7 +11,7 @@ Claude Code の返答の冒頭を、手元の VOICEVOX で読み上げるフッ�
 | `src/claudecodespeak/user_dict.py` | `claudecodespeak dict`。VOICEVOX のユーザー辞書を操作する |
 | `src/claudecodespeak/cli.py` | サブコマンドをまとめる |
 | `systemd/voicevox-engine.service` | VOICEVOX のエンジンを常駐させる user unit |
-| `voicevox/user_dict.json` | VOICEVOX のユーザー辞書を書き出したもの（読み間違える語の読み） |
+| `voicevox/user_dict.json` | VOICEVOX のユーザー辞書を書き出したもの（読み間違える単語の読み） |
 | `docs/UsersGuide.md` | インストール、Claude Code の設定、読み上げの無効化、読み上げの辞書の扱い方 |
 | `docs/Developer.md` | 動き方の細かい決まり、フックの仕組み、テストと動作の確かめ方 |
 
@@ -25,7 +25,7 @@ VOICEVOX（夜語トバリ・明るい）で読み上げる。`AskUserQuestion` 
 - 環境変数 `CLAUDE_TTS_SPEAK` が `1` のときだけ鳴る
 - 読むのは冒頭の 180 字ほど。なるべく文末で切り、コードブロックは「コード省略」と読み、表は飛ばす
 - 1 文目ができたらすぐ鳴らし、残りは鳴らしている間に合成する
-- 読み間違えやすい記号・数字・語は、置き換えとエンジンの辞書で直す
+- 読み間違えやすい記号・数字・単語は、置き換えとエンジンの辞書で直す
 - ツールを呼ぶ前などの途中の文章も読む。再生中に次の文章が来たら、前の再生を止めて新しいほうを読む
 - 鳴らせない環境では、使えないことを覚えて、次からは確かめもせずに終わる
 

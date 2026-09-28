@@ -59,9 +59,9 @@ def query(text):
 def accent_of(phrases):
     """/audio_query のアクセント句から、辞書の accent_type を決める。
 
-    エンジンは 1 語だけのとき、平板の語も「最後の音の後で下がる」として返し、尾高と
+    エンジンは単語 1 つだけのとき、平板の単語も「最後の音の後で下がる」として返し、尾高と
     見分けられない（後ろに「が」を付けると、カタカナの区切り方が変わってしまう）。
-    ponytail: 句が 1 つで最後の音なら平板（0）とする。尾高の語は --accent で直す
+    ponytail: 句が 1 つで最後の音なら平板（0）とする。尾高の単語は --accent で直す
     句に分かれたときは、先頭の句の位置を使う。
     """
     if not phrases:
@@ -73,7 +73,7 @@ def accent_of(phrases):
 
 
 def find(surface):
-    """同じ表記の語の (ID, 中身)。エンジンは英数字を全角にして持つので、NFKC で揃えて比べる。"""
+    """同じ表記の単語の (ID, 中身)。エンジンは英数字を全角にして持つので、NFKC で揃えて比べる。"""
     words = json.loads(call("GET", "/user_dict"))
     key = unicodedata.normalize("NFKC", surface)
     return next(((i, w) for i, w in words.items() if unicodedata.normalize("NFKC", w["surface"]) == key), (None, None))
@@ -99,13 +99,13 @@ def dict_group():
 @click.argument("surface")
 @click.argument("pronunciation")
 @click.option("--accent", type=int, help="音が下がる直前の音が頭から何番目か。0 は平板。省くとエンジンに任せる")
-@click.option("--type", "type_", type=click.Choice(list(TYPES.values())), help="品詞。省くと、新しい語は PROPER_NOUN、登録済みの語は今の品詞のまま")
-@click.option("--priority", type=click.IntRange(0, 10), help="優先度（0〜10）。エンジン標準の読みに負けるときに上げる。省くと、新しい語は 5、登録済みの語は今の優先度のまま")
+@click.option("--type", "type_", type=click.Choice(list(TYPES.values())), help="品詞。省くと、新しい単語は PROPER_NOUN、登録済みの単語は今の品詞のまま")
+@click.option("--priority", type=click.IntRange(0, 10), help="優先度（0〜10）。エンジン標準の読みに負けるときに上げる。省くと、新しい単語は 5、登録済みの単語は今の優先度のまま")
 @click.option("--speak", is_flag=True, help="登録後に表記を読み上げて確かめる")
 def add(surface, pronunciation, accent, type_, priority, speak):
-    """VOICEVOX のユーザー辞書に語を足す。
+    """VOICEVOX のユーザー辞書に単語を足す。
 
-    SURFACE は表記（英字は大文字と小文字を別の語として扱う）、PRONUNCIATION は読み（カタカナ）。
+    SURFACE は表記（英字は大文字と小文字を別の単語として扱う）、PRONUNCIATION は読み（カタカナ）。
     """
     accent = accent if accent is not None else accent_of(query(pronunciation)["accent_phrases"])
     word = dict(surface=surface, pronunciation=pronunciation, accent_type=accent)
@@ -138,7 +138,7 @@ def kana(text):
 
 @dict_group.command("list")
 def list_():
-    """登録した語を、表記順に 1 語 1 行で一覧する（ID・表記・読み・accent_type）。"""
+    """登録した単語を、表記順に 1 単語 1 行で一覧する（ID・表記・読み・accent_type）。"""
     words = json.loads(call("GET", "/user_dict"))
     for uuid, w in sorted(words.items(), key=lambda kv: kv[1]["surface"]):
         print(f"{uuid}  {w['surface']}  {w['pronunciation']}  {w['accent_type']}")
@@ -147,7 +147,7 @@ def list_():
 @dict_group.command("remove")
 @click.argument("surface")
 def remove(surface):
-    """SURFACE（表記）で指定して、登録した語を消す。"""
+    """SURFACE（表記）で指定して、登録した単語を消す。"""
     uuid, _old = find(surface)
     if not uuid:
         sys.exit(f"登録されていない: {surface}")
@@ -167,6 +167,6 @@ def export(file):
 @dict_group.command("import")
 @click.argument("file", type=click.File("rb"), default="-")
 def import_(file):
-    """辞書を読み込む。FILE を省くと標準入力。同じ ID の語は上書きする。"""
+    """辞書を読み込む。FILE を省くと標準入力。同じ ID の単語は上書きする。"""
     call("POST", "/import_user_dict", data=file.read(), override="true")
     print("読み込んだ")
