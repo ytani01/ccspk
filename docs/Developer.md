@@ -1,10 +1,10 @@
 # 開発者向け
 
 依存は click、loguru、VOICEVOX のエンジン（`127.0.0.1:50021`）、`pw-play`。
-読み上げの範囲や切り方など、利用者から見た動きは下の「動き方」、インストールと辞書は
+読み上げの範囲や切り方など、利用者から見た動きは下の「2. 動き方」、インストールと辞書は
 [UsersGuide](UsersGuide.md) にある。
 
-## ファイル
+## 1. ファイル
 
 コードは `src/ccspk/` にあり、コマンド `ccspk` のサブコマンドに分かれる。
 
@@ -19,7 +19,7 @@
 | `src/ccspk/mylog.py` | loguru のログの設定 |
 | `systemd/voicevox-engine.service` | VOICEVOX のエンジンを常駐させる user unit。起動のたびに辞書を読み込む |
 
-## 動き方
+## 2. 動き方
 
 - 環境変数 `CCSPK_SPEAK` が `1` のときだけ鳴る
 - 読み上げるのは整形した先頭 180 字（30 秒ほど）。超えるときは、文の途中で
@@ -27,7 +27,7 @@
   読点まで、それも無ければ 180 字で切る。コードブロックは
   「コード省略」に置き換え、表・Markdown の記号・リンクの URL は消す
 - 読み間違いを減らすため、記号と数字は置き換え、単語の読みはエンジンの辞書で直す。どちらも
-  [UsersGuide.md](UsersGuide.md#読み上げの辞書) にある
+  [UsersGuide.md](UsersGuide.md#2-読み上げの辞書) にある
 - 文ごとに合成し、1 文目ができたらすぐ鳴らす。2 文目以降は鳴らしている
   間に合成する。短い文の直後に長い文が来ると、継ぎ目で数秒待つことがある
 - 1 文目と 2 文目はさらに前後 2 つに切り、1 文目の前半ができたらすぐ鳴らす。
@@ -49,13 +49,13 @@
   `Stop` が空のときは、今までどおり止める
 - サブエージェントの報告や質問では鳴らない（`SubagentStop` は登録せず、`MessageDisplay` と
   `PreToolUse` も `agent_id` があれば読まない）
-- 鳴らせないとき（条件は下の [「鳴らせるかを確かめる」](#鳴らせるかを確かめる)）は、鳴らさずに終わり、
+- 鳴らせないとき（条件は下の [「3.4 鳴らせるかを確かめる」](#34-鳴らせるかを確かめる)）は、鳴らさずに終わり、
   使えないことを覚えて、次からは確かめもせずに終わる。
-  戻し方は [UsersGuide.md](UsersGuide.md#読み上げが止まったままのとき) にある
+  戻し方は [UsersGuide.md](UsersGuide.md#15-読み上げが止まったままのとき) にある
 
-## フックの仕組み
+## 3. フックの仕組み
 
-### 流れ
+### 3.1 流れ
 
 Claude Code は、返答を終えるたびに Stop フックとして、文章を表示するたびに
 MessageDisplay フックとして、`AskUserQuestion` を呼ぶ直前に PreToolUse フックとして
@@ -95,7 +95,7 @@ MessageDisplay フックとして、`AskUserQuestion` を呼ぶ直前に PreTool
 フックはここで終わり、Claude Code を待たせない（登録の `timeout` は 5 秒）。
 合成と再生は子プロセスが受け持つ。
 
-### 子プロセス
+### 3.2 子プロセス
 
 `speak()` は、`python -P -m ccspk.hook --play <本文>` で子プロセスを起こす。
 `-P` は、Claude Code の作業ディレクトリを `sys.path` に入れないため。
@@ -114,14 +114,14 @@ MessageDisplay フックとして、`AskUserQuestion` を呼ぶ直前に PreTool
 エンジンは要求を 1 つずつ処理し、止めた前の返答の合成も最後まで続けるので、
 その後ろに並ぶと待たされる。タイムアウトを 60 秒と長めにしているのはそのため。
 
-### 前の再生を止める
+### 3.3 前の再生を止める
 
 `stop_playing()` は `PIDFILE` の PID を読み、ファイルを消してから、
 そのプロセスグループに `SIGTERM` を送る。送ったら `True` を返す。再生が終わったあとで PID が別の
 プロセスに使い回されていることがあるので、`/proc/<pid>/cmdline` に `--play` と
-`ccspk.hook` があるときだけ送る（子プロセスの起こし方は上の「子プロセス」）。
+`ccspk.hook` があるときだけ送る（子プロセスの起こし方は上の「3.2 子プロセス」）。
 
-### 鳴らせるかを確かめる
+### 3.4 鳴らせるかを確かめる
 
 `unusable()` は次の順に見て、最初にだめだったものの理由を返す。
 
@@ -129,11 +129,11 @@ MessageDisplay フックとして、`AskUserQuestion` を呼ぶ直前に PreTool
 2. エンジンに TCP で接続できるか。HTTP では問い合わせず、接続できるかだけを見る
 3. PipeWire のソケットに接続できるか。場所は `$PIPEWIRE_RUNTIME_DIR`（無ければ
    `$XDG_RUNTIME_DIR`）の `pipewire-0`。`PIPEWIRE_REMOTE` があるときは確かめない
-   （理由は [UsersGuide](UsersGuide.md#ccspk-hook)）
+   （理由は [UsersGuide](UsersGuide.md#32-ccspk-hook)）
 
 使えるときは、3 つ合わせて 1 ms ほどで終わる。
 
-### 実行時のファイル
+### 3.5 実行時のファイル
 
 どれも `$XDG_RUNTIME_DIR` に置く。`$XDG_RUNTIME_DIR` が無い環境では `/tmp` に、
 利用者の uid を名前に入れて置く。
@@ -146,7 +146,7 @@ MessageDisplay フックとして、`AskUserQuestion` を呼ぶ直前に PreTool
 | `LOCK` | `ccspk.lock`（`/tmp/ccspk-<uid>.lock`） | 同時に来たフックを 1 つずつ通すためのロック。`ccspk stop` も PIDFILE を触る前に取る |
 | `PARTS` | `ccspk.parts/`（`/tmp/ccspk-<uid>.parts/`） | MessageDisplay の分。`<message_id>.<index>` と、最後の分の番号を書いた `<message_id>.final` |
 
-### 整形と分割
+### 3.6 整形と分割
 
 | 関数 | すること |
 |---|---|
@@ -156,10 +156,10 @@ MessageDisplay フックとして、`AskUserQuestion` を呼ぶ直前に PreTool
 | `split_first()` | 文を、音を早めるために前後 2 つに切る |
 | `chunks()` | 合成する単位。1・2 文目は `split_first()` で切り、3 文目以降は文ごと |
 
-どこで切るかの決まりは [「動き方」](#動き方) に、
-記号と数字の置き換えは [UsersGuide の「記号と数字」](UsersGuide.md#記号と数字) にある。
+どこで切るかの決まりは [「2. 動き方」](#2-動き方) に、
+記号と数字の置き換えは [UsersGuide の「2.2 記号と数字」](UsersGuide.md#22-記号と数字) にある。
 
-### 定数
+### 3.7 定数
 
 | 定数 | 値 | 意味 |
 |---|---|---|
@@ -179,9 +179,9 @@ MessageDisplay フックとして、`AskUserQuestion` を呼ぶ直前に PreTool
 
 `ENGINE` と `SPEAKER` は `user_dict.py` にもあり、`hook.py` と揃える。
 
-## テストと動作の確かめ方
+## 4. テストと動作の確かめ方
 
-### 自己テスト
+### 4.1 自己テスト
 
 整形と分割（`to_speech`、`clip`、`sentences`、`split_first`、`chunks`）は、
 `demo()` の `assert` で確かめている（pytest ではない）。通れば `ok` と出る。
@@ -196,13 +196,13 @@ PreToolUse の質問の文を取り出す `questions()` も確かめている。
 整形や分割を変えたら、`demo()` に例を足す。`unusable()` と `main()` の分岐は
 環境に依るので、`demo()` では確かめていない。下の手順で手で確かめる。
 
-### フックを手で動かす
+### 4.2 フックを手で動かす
 
 コマンドは、どれもリポジトリの直下で走らせる。`uv sync` で `.venv` に入れておき、
 入れ直さずに手元のコードを試すため `.venv/bin/ccspk` を呼ぶ。
 
 本物の `$XDG_RUNTIME_DIR` で試して `ccspk.unusable` が残ると、ファイルを
-消すまで読み上げが止まる（[UsersGuide](UsersGuide.md#読み上げが止まったままのとき)）。
+消すまで読み上げが止まる（[UsersGuide](UsersGuide.md#15-読み上げが止まったままのとき)）。
 また、本物の `ccspk.pid` を使うと、そのとき鳴っている読み上げを止めてしまう。
 `XDG_RUNTIME_DIR` を一時ディレクトリに向け、PipeWire の場所だけ
 `PIPEWIRE_RUNTIME_DIR` で本物を指す。
@@ -243,7 +243,7 @@ rm -r $tmp
 .venv/bin/ccspk say '合成と再生だけを試す。'
 ```
 
-### 最初の音までの時間
+### 4.3 最初の音までの時間
 
 フックを起動してから、子プロセスのグループに `pw-play` が現れるまでを測る。
 上と同じく一時ディレクトリで動かす。エンジンが前の合成を続けていると、その分
@@ -272,9 +272,9 @@ print(f"{time.monotonic() - t0:.2f} 秒")
 PY
 ```
 
-目安は [「動き方」](#動き方) にある。
+目安は [「2. 動き方」](#2-動き方) にある。
 
-## TODO の番号
+## 5. TODO の番号
 
 TODO-001〜006 は、`~/.claude`（dotfiles-claude）から分けたときに付け替えた。
 `archives/todo/` の各ファイルに旧番号を書いてある。分ける前のコミット

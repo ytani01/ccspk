@@ -1,6 +1,6 @@
 # 使い方
 
-## インストール
+## 1. インストール
 
 リポジトリは `~/work/ccspk` に clone する（下の手順のコマンドは、
 このパスを前提にしている）。コマンド `ccspk` は `uv tool install` でインストールする。
@@ -12,7 +12,7 @@ uv tool install ~/work/ccspk
 
 コードを直したら、`uv tool install --reinstall ~/work/ccspk` で再インストールする。
 
-### VOICEVOX エンジン
+### 1.1 VOICEVOX エンジン
 
 エンジンは公式リリースの Linux 単体版を使う（約 1.8 GB、展開後 2.2 GB）。
 夜語トバリは 0.25.2 からなので、AUR の `voicevox-engine`（0.24.1）では使えない。
@@ -36,14 +36,14 @@ unit ファイルのパスを揃えて書き換え、`systemctl --user daemon-re
 
 エンジンが起動するたびに、`~/.config/ccspk/user_dict.json` があれば辞書に読み込む
 （unit ファイルの `ExecStartPost`。`~/.local/bin/ccspk` を使うので、先に `ccspk` を
-インストールしておく）。詳しくは [辞書のファイル](#辞書のファイル)。
+インストールしておく）。詳しくは [辞書のファイル](#21-辞書のファイル)。
 
-整形が正しく動くかは [`ccspk test`](#ccspk-test) で確認できる。
+整形が正しく動くかは [`ccspk test`](#36-ccspk-test) で確認できる。
 
-### Claude Code の設定
+### 1.2 Claude Code の設定
 
 `~/.claude/settings.json` の `hooks` に Stop・MessageDisplay・PreToolUse のフックを追加し、
-`env` で `CCSPK_SPEAK` を `1` にする。どのフックで何を読むかは [`ccspk hook`](#ccspk-hook)。
+`env` で `CCSPK_SPEAK` を `1` にする。どのフックで何を読むかは [`ccspk hook`](#32-ccspk-hook)。
 途中の文章や質問が要らなければ、MessageDisplay や PreToolUse のフックは追加しない。
 `ccspk` をインストールしていないマシンでは何もしない。
 `ccspk` は `PATH` から探すので、インストールしたのに音が出ないときは、Claude Code を
@@ -91,30 +91,30 @@ unit ファイルのパスを揃えて書き換え、`systemctl --user daemon-re
 }
 ```
 
-### 読み上げを無効にする
+### 1.3 読み上げを無効にする
 
 `env` の `CCSPK_SPEAK` の行を消す。フックの登録は残してよい
 （何もせずに終わる）。
 
-### 鳴っている読み上げを止める
+### 1.4 鳴っている読み上げを止める
 
 Claude Code で Esc を押して返答を中断しても、読み上げは止まらない。止めるときは
-[`ccspk stop`](#ccspk-stop) を実行する。
+[`ccspk stop`](#34-ccspk-stop) を実行する。
 
-### 読み上げが止まったままのとき
+### 1.5 読み上げが止まったままのとき
 
 フックは、鳴らせないと分かると理由をファイルに記録し、そのファイルがあるあいだは
-読み上げずに終わる（[`ccspk hook`](#ccspk-hook)）。エンジンを一時的に止めたときや、
+読み上げずに終わる（[`ccspk hook`](#32-ccspk-hook)）。エンジンを一時的に止めたときや、
 ログイン直後にエンジンが起動し終わる前に返答が来たときも記録される。
 
-1. `ccspk status` で理由を見る（[`ccspk status`](#ccspk-status)）
+1. `ccspk status` で理由を見る（[`ccspk status`](#35-ccspk-status)）
 2. 原因を取り除く
 3. `ccspk status --clear` でファイルを消す。次の返答から、フックがまた確認する
 
-## 読み上げの辞書
+## 2. 読み上げの辞書
 
 返答の読み上げで読み間違える単語は、VOICEVOX のエンジンのユーザー辞書で読みを直す。
-操作はどれも [`ccspk dict`](#ccspk-dict) のサブコマンドで行う。
+操作はどれも [`ccspk dict`](#37-ccspk-dict) のサブコマンドで行う。
 
 1. `ccspk dict kana` で、エンジンが今どう読むかを確認する
 2. `ccspk dict add` で表記と読みを登録する。登録後の読みが表示される
@@ -127,7 +127,7 @@ ccspk dict kana 'README を直す'
 ccspk dict add README リードミー --speak
 ```
 
-### 辞書のファイル
+### 2.1 辞書のファイル
 
 辞書のファイルは `~/.config/ccspk/user_dict.json`（`$XDG_CONFIG_HOME` があれば
 `$XDG_CONFIG_HOME/ccspk/user_dict.json`）。表記は半角で書く。
@@ -139,7 +139,7 @@ ccspk dict add README リードミー --speak
   あきらめる（エンジンは止めない）。そのときは `journalctl --user -u voicevox-engine` で理由を見る
 - 別のマシンへは、このファイルを写してからエンジンを再起動する（または `dict import` する）
 
-### 記号と数字
+### 2.2 記号と数字
 
 辞書で直せないものは、`src/ccspk/hook.py` の `to_speech` で置き換えている。
 
@@ -158,9 +158,9 @@ ccspk dict add README リードミー --speak
   （→ `決着させたので`）。カッコは半角で、内側と外側の両方にスペースがあり、中身が小文字の
   16 進 7 桁のもの。`` ( `6e985ac` ) `` も同じ
 
-## コマンド
+## 3. コマンド
 
-### ccspk
+### 3.1 ccspk
 
 ```
 ccspk [-d] COMMAND [ARGS]...
@@ -180,7 +180,7 @@ ccspk -h
 - `1` — 失敗。理由を標準エラー出力に出す
 - `2` — 引数やオプションの誤り
 
-### ccspk hook
+### 3.2 ccspk hook
 
 ```
 ccspk hook
@@ -219,7 +219,7 @@ Claude Code の Stop・MessageDisplay・PreToolUse フックとして動く。�
   全部終わると消える（`loginctl enable-linger` を有効にしていれば再起動まで残る）。
   `/tmp` のファイルは再起動まで残る
 
-### ccspk say
+### 3.3 ccspk say
 
 ```
 ccspk say TEXT
@@ -250,7 +250,7 @@ ccspk say TEXT
 ccspk say 'こんにちは。読み上げを試す。'
 ```
 
-### ccspk stop
+### 3.4 ccspk stop
 
 ```
 ccspk stop
@@ -273,7 +273,7 @@ $ ccspk stop
 止めた
 ```
 
-### ccspk status
+### 3.5 ccspk status
 
 ```
 ccspk status [--clear]
@@ -293,7 +293,7 @@ ccspk status [--clear]
 
 **ファイル**
 
-- `$XDG_RUNTIME_DIR/ccspk.unusable`（または `/tmp/ccspk-<uid>.unusable`）— [`ccspk hook`](#ccspk-hook) を参照
+- `$XDG_RUNTIME_DIR/ccspk.unusable`（または `/tmp/ccspk-<uid>.unusable`）— [`ccspk hook`](#32-ccspk-hook) を参照
 
 **例**
 
@@ -307,7 +307,7 @@ $ ccspk status
 止まっていない
 ```
 
-### ccspk test
+### 3.6 ccspk test
 
 ```
 ccspk test
@@ -331,7 +331,7 @@ ok
 ok
 ```
 
-### ccspk dict
+### 3.7 ccspk dict
 
 ```
 ccspk dict COMMAND [ARGS]...
@@ -342,9 +342,9 @@ VOICEVOX のエンジンのユーザー辞書を操作する。どのサブコ�
 終了ステータス `1` で終わる。
 
 `dict add`・`dict remove`・`dict import` は、成功すると、エンジンの辞書を
-[辞書のファイル](#辞書のファイル)へ書き出し、「書き出した: パス」と表示する。
+[辞書のファイル](#21-辞書のファイル)へ書き出し、「書き出した: パス」と表示する。
 
-### ccspk dict kana
+### 3.8 ccspk dict kana
 
 ```
 ccspk dict kana TEXT
@@ -372,7 +372,7 @@ $ ccspk dict kana 'Ponytail を使う'
 ポ'ニテイル、オ'/_ツカウ'
 ```
 
-### ccspk dict add
+### 3.9 ccspk dict add
 
 ```
 ccspk dict add [--accent N] [--type TYPE] [--priority N] [--speak] SURFACE PRONUNCIATION
@@ -412,7 +412,7 @@ ccspk dict add [--accent N] [--type TYPE] [--priority N] [--speak] SURFACE PRONU
 
 **ファイル**
 
-- `~/.config/ccspk/user_dict.json` — 登録したあと書き出す（[辞書のファイル](#辞書のファイル)）
+- `~/.config/ccspk/user_dict.json` — 登録したあと書き出す（[辞書のファイル](#21-辞書のファイル)）
 
 **例**
 
@@ -423,7 +423,7 @@ $ ccspk dict add Ponytail ポニーテール
 読み: ポニイテ'エル
 ```
 
-### ccspk dict list
+### 3.10 ccspk dict list
 
 ```
 ccspk dict list
@@ -449,7 +449,7 @@ e8587f70-4e27-4017-aa5c-7c5bfdf4251f  README  リードミー  1  5
 …
 ```
 
-### ccspk dict remove
+### 3.11 ccspk dict remove
 
 ```
 ccspk dict remove SURFACE
@@ -480,7 +480,7 @@ $ ccspk dict remove Ponytail
 書き出した: /home/user/.config/ccspk/user_dict.json
 ```
 
-### ccspk dict export
+### 3.12 ccspk dict export
 
 ```
 ccspk dict export [FILE]
@@ -488,7 +488,7 @@ ccspk dict export [FILE]
 
 **説明**
 
-エンジンの辞書を JSON で書き出す。[辞書のファイル](#辞書のファイル)と同じ形で、表記は半角にする。
+エンジンの辞書を JSON で書き出す。[辞書のファイル](#21-辞書のファイル)と同じ形で、表記は半角にする。
 辞書のファイルとは別の場所へ控えを取るときに使う。
 
 **引数**
@@ -506,7 +506,7 @@ ccspk dict export [FILE]
 ccspk dict export backup.json
 ```
 
-### ccspk dict import
+### 3.13 ccspk dict import
 
 ```
 ccspk dict import [FILE]
