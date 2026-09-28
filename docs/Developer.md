@@ -129,7 +129,7 @@ MessageDisplay フックとして、`AskUserQuestion` を呼ぶ直前に PreTool
 2. エンジンに TCP で接続できるか。HTTP では問い合わせず、接続できるかだけを見る
 3. PipeWire のソケットに接続できるか。場所は `$PIPEWIRE_RUNTIME_DIR`（無ければ
    `$XDG_RUNTIME_DIR`）の `pipewire-0`。`PIPEWIRE_REMOTE` があるときは確かめない
-   （理由は [UsersGuide](UsersGuide.md#読み上げが止まったままのとき)）
+   （理由は [UsersGuide](UsersGuide.md#ccspk-hook)）
 
 使えるときは、3 つ合わせて 1 ms ほどで終わる。
 

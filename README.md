@@ -21,6 +21,6 @@ Claude Code の返答の冒頭を、手元の VOICEVOX（夜語トバリ・明�
 ## 文書
 
 - [docs/UsersGuide.md](docs/UsersGuide.md) — インストール、Claude Code の設定、読み上げの無効化と止め方、
-  読み上げの辞書
+  読み上げの辞書、コマンドのリファレンス
 - [docs/Developer.md](docs/Developer.md) — 動き方の細かい決まり、ファイル、フックの仕組み、
   テストと動作の確かめ方

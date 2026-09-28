@@ -1,0 +1,204 @@
+$ ccspk dict export /tmp/claude-649/-home-ytani-work-ccspk/b57b11af-812f-4265-af7b-e787609cbfa6/scratchpad/verify/backup.json
+rc=0
+
+--- list before
+48
+Ponytail 未登録
+$ ccspk dict kana Ponytail を使う
+ポ'ニテイル、オ'/_ツカウ'
+rc=0
+
+$ ccspk dict add Ponytail ポニーテール
+登録した: Ponytail → ポニーテール（accent_type 4、ID 304694db-2e77-4a76-9f1a-e2ed10c6db5e）
+書き出した: /tmp/claude-649/-home-ytani-work-ccspk/b57b11af-812f-4265-af7b-e787609cbfa6/scratchpad/verify/cfg/ccspk/user_dict.json
+読み: ポニイテ'エル
+rc=0
+
+$ ccspk dict list
+23b90056-1328-4e2e-9c12-8509936fa0ae  .config  ドットコンフィグ  2  5
+cd5eef0a-5e1b-4c85-9985-bf59d70f6227  .md  ドットエムディー  4  5
+e3b68943-3738-4fc2-b166-1cb0a7d494a6  .py  ドットパイ  0  7
+b5b54622-a0dc-4d40-9312-a691f03dd138  /etc  スラッシュエトセ  6  5
+50e54cae-ac40-40a5-86c3-cd0257267c30  /etc/  スラッシュエトセスラッシュ  9  5
+5c48dfa4-6b02-4843-9ae5-3ca19ffc11a2  CLAUDE  クロード  1  5
+7c5f23e8-9e75-4bf7-a0c8-a49dd7c120d0  CLAUDE.md  クロードドットエムディー  1  5
+943c13bf-97a8-4e61-b5ac-1756a656188a  COMMON  コモン  1  7
+11dbeba4-41bf-4102-a332-f10ff8c6c4d2  Developer.md  デベロッパードットエムディー  3  5
+9962d564-ce38-45c8-9330-51ae914b909e  JSON  ジェイソン  1  5
+debcd5ca-41db-48a5-a94d-eb3f4f4d2b68  LICENSE  ライセンス  1  5
+9e4beff5-a916-4229-952d-74b39b9a0867  LOCK  ロック  1  5
+d94404c9-c609-4348-bc9e-a47bc96a5517  MELPA  メルパ  1  5
+496dbf33-ffea-427d-b2a0-eaa223ef3639  PROPER  プロパア  2  7
+304694db-2e77-4a76-9f1a-e2ed10c6db5e  Ponytail  ポニーテール  4  7
+e8587f70-4e27-4017-aa5c-7c5bfdf4251f  README  リードミー  1  5
+949935de-f52a-4654-9df2-3de44be6376e  README.md  リードミードットエムディー  1  5
+ac174158-5469-45a4-8cd4-4aa95444b8d1  Reviewer  レビュータントウ  4  5
+aec7be50-cd18-410a-820f-0138d17a1b9b  SIGTERM  シグタアム  2  7
+3648823d-9e9a-4a90-aa40-4283274665f7  STATE  ステイト  2  5
+bef24198-7587-4699-87bd-b74c59a7f0aa  SUFFIX  サフィックス  2  7
+3a1824ad-c348-4ed1-933b-f5f19427c582  TODO  トゥードゥー  0  5
+08f0a128-f883-489e-98d6-21e769bb9aa9  TODO.md  トゥウドゥウドットエムディイ  0  7
+072723ef-db65-4cd5-b6ff-9a963f6b790d  UsersGuide.md  ユーザーズガイドドットエムディー  1  5
+5875cf9a-cb7a-4826-9b06-43b5ee91b4e6  Verifier  ケンショウタントウ  5  5
+cf128115-f355-4f8c-ad18-3eca8c0f83de  acpi  エーシーピーアイ  0  5
+35e0616e-a131-4672-9334-de56f7e81b1e  add  アッド  1  7
+f03fbba1-1a1b-4e9d-bcfb-bf401c60b744  archives  アーカイブズ  3  5
+90ca4c17-5845-48c3-9270-64eba00d1546  bash  バッシェ  2  5
+ecf7665e-9cf1-4a8c-b889-9b1f862d2a99  ccspk  シイシイエスピイケイ  0  7
+428d492b-e783-4373-a3fa-bd184372d9dd  efi  イイエフアイ  0  5
+e935527e-e4e4-49bc-b617-e28233f3a31f  hyprwhspr  ハイパーウィスパー  5  5
+01e5b424-ce1e-4876-8b05-54e6279fc067  implementer  ジッソウタントウ  5  5
+4b700039-d6c2-4f68-b4d9-002022f9b85d  json  ジェイソン  1  5
+113b1207-3185-4dc1-bc05-b4b7ec7786dc  reviewer  レビュータントウ  4  5
+6060a01d-ae07-4a85-b9ba-92ab1acbf1ae  sh  シェル  0  7
+d75fa89b-7699-490e-bc9e-29951a15b45e  systemd  システムディー  1  5
+74a3d2e2-2e9d-415d-a751-f57aa72d024b  todo  トゥウドゥウ  0  10
+206582f6-cd40-48c3-8236-8f5dfe600f8e  ufw  ユーエフダブリュウ  0  5
+911f1fc1-26e2-4fbc-832e-2f74adc26b8b  verifier  ケンショウタントウ  5  5
+4b5ac63e-2aba-4cad-a5cc-6485660ec5a7  zsh  ゼットシェル  3  5
+dde6b959-cd88-4db3-9c4c-2acf0ee9a362  一時ディレクトリ  イチジディレクトリ  0  8
+9fa371d7-7d80-40d3-bc8b-f5c437792dab  文目  ブンメ  0  7
+7e83d072-80f9-4150-91a7-521e02d18cfd  空になった  カラニナッタ  2  5
+ab1c836b-6f46-43f9-b4cd-468f54385002  空にならない  カラニナラナイ  2  5
+319adbfd-57d1-4fde-ad24-668e41f3a909  空になる  カラニナル  2  5
+973b220b-d56d-467d-b813-f2cbb7a2c7d9  節  セツ  1  7
+ef19eecf-860a-4a75-b454-4b0d40f925a6  語  ゴ  0  7
+e2c8580f-f5a0-43b6-b8ea-54f824bf0a41  通って  カヨッテ  0  10
+rc=0
+
+$ ccspk dict add
+Usage: ccspk dict add [OPTIONS] SURFACE PRONUNCIATION
+Try 'ccspk dict add --help' for help.
+
+Error: Missing argument 'SURFACE'.
+rc=2
+
+$ ccspk dict add Bad ボ！
+エンジンが断った（422）: {"detail":"パラメータに誤りがあります。\n1 validation error for UserDictWord\npronunciation\n  Value error, 発音は有効なカタカナでなくてはいけません。 [type=value_error, input_value='ボ！', input_type=str]\n    For further information visit https://errors.pydantic.dev/2.11/v/value_error"}
+rc=1
+
+Bad 未登録
+$ ccspk dict export /tmp/claude-649/-home-ytani-work-ccspk/b57b11af-812f-4265-af7b-e787609cbfa6/scratchpad/verify/nodir/x.json
+Error: Could not open file '/tmp/claude-649/-home-ytani-work-ccspk/b57b11af-812f-4265-af7b-e787609cbfa6/scratchpad/verify/nodir/x.json': No such file or directory
+rc=1
+
+$ ccspk dict import /tmp/claude-649/-home-ytani-work-ccspk/b57b11af-812f-4265-af7b-e787609cbfa6/scratchpad/verify/none.json
+Usage: ccspk dict import [OPTIONS] [FILE]
+Try 'ccspk dict import --help' for help.
+
+Error: Invalid value for '[FILE]': '/tmp/claude-649/-home-ytani-work-ccspk/b57b11af-812f-4265-af7b-e787609cbfa6/scratchpad/verify/none.json': No such file or directory
+rc=2
+
+$ ccspk dict import /tmp/claude-649/-home-ytani-work-ccspk/b57b11af-812f-4265-af7b-e787609cbfa6/scratchpad/verify/a.json
+エンジンが断った（422）: {"detail":[{"type":"dict_type","loc":["body"],"msg":"Input should be a valid dictionary","input":[1]}]}
+rc=1
+
+$ ccspk dict import /tmp/claude-649/-home-ytani-work-ccspk/b57b11af-812f-4265-af7b-e787609cbfa6/scratchpad/verify/b.json
+エンジンが断った（422）: {"detail":[{"type":"model_attributes_type","loc":["body","x"],"msg":"Input should be a valid dictionary or object to extract fields from","input":1}]}
+rc=1
+
+$ ccspk dict import /tmp/claude-649/-home-ytani-work-ccspk/b57b11af-812f-4265-af7b-e787609cbfa6/scratchpad/verify/backup.json
+読み込んだ
+書き出した: /tmp/claude-649/-home-ytani-work-ccspk/b57b11af-812f-4265-af7b-e787609cbfa6/scratchpad/verify/cfg/ccspk/user_dict.json
+rc=0
+
+$ ccspk dict remove Ponytail
+消した: Ponytail（ID 304694db-2e77-4a76-9f1a-e2ed10c6db5e）
+書き出した: /tmp/claude-649/-home-ytani-work-ccspk/b57b11af-812f-4265-af7b-e787609cbfa6/scratchpad/verify/cfg/ccspk/user_dict.json
+rc=0
+
+$ ccspk dict remove Ponytail
+登録されていない: Ponytail
+rc=1
+
+$ ccspk dict remove NoSuchWord123
+登録されていない: NoSuchWord123
+rc=1
+
+--- status
+$ ccspk status
+止まっていない
+rc=0
+
+$ ccspk status
+/tmp/claude-649/-home-ytani-work-ccspk/b57b11af-812f-4265-af7b-e787609cbfa6/scratchpad/verify/run/ccspk.unusable: テスト理由
+rc=0
+
+$ ccspk status --clear
+/tmp/claude-649/-home-ytani-work-ccspk/b57b11af-812f-4265-af7b-e787609cbfa6/scratchpad/verify/run/ccspk.unusable: テスト理由
+消した
+rc=0
+
+$ ccspk status
+止まっていない
+rc=0
+
+$ ccspk stop
+鳴っていない
+rc=0
+
+$ ccspk test
+ok
+ok
+rc=0
+
+--- hook
+rc=0 (no CCSPK_SPEAK)
+rc=0 (unusable)
+$ ccspk say テスト。
+rc=0
+
+--- options
+$ ccspk -V
+ccspk 0.2.1.dev14+g33c7eaa6b
+rc=0
+
+$ ccspk -h
+Usage: ccspk [OPTIONS] COMMAND [ARGS]...
+
+  Claude Code の返答を VOICEVOX で読み上げる。
+
+Options:
+  -V, -v, --version  Show the version and exit.
+  -d, --debug        debug flag
+  -h, --help         Show this message and exit.
+
+Commands:
+  dict    VOICEVOX のユーザー辞書を操作する。
+  hook    Stop・MessageDisplay・PreToolUse フック。標準入力のフックの入力を読み、返答の冒頭を読み上げる。
+  say     合成と再生だけを試す（子プロセスと同じ動き）。
+  status  鳴らせないと覚えている理由（UNUSABLE）を表示する。無ければ「止まっていない」と表示する。
+  stop    鳴っている読み上げを止める（エンジンの合成は止めない）。
+  test    hook と dict の自己テストを走らせる。
+rc=0
+
+$ ccspk dict add -h
+Usage: ccspk dict add [OPTIONS] SURFACE PRONUNCIATION
+
+  VOICEVOX のユーザー辞書に単語を足す。
+
+  SURFACE は表記（英字は大文字と小文字を別の単語として扱う）、PRONUNCIATION は読み（カタカナ）。
+
+Options:
+  --accent INTEGER                音が下がる直前の音が頭から何番目か。0 は平板。省くとエンジンに任せる
+  --type [PROPER_NOUN|COMMON_NOUN|VERB|ADJECTIVE|SUFFIX]
+                                  品詞。省くと、新しい単語は PROPER_NOUN、登録済みの単語は今の品詞のまま
+  --priority INTEGER RANGE        優先度（0〜10）。エンジン標準の読みに負けるときに上げる。省くと、新しい単語は
+                                  7（エンジンの既定 5 より上）、登録済みの単語は今の優先度のまま
+                                  [0<=x<=10]
+  --speak                         登録後に表記を読み上げて確かめる
+  -h, --help                      Show this message and exit.
+rc=0
+
+$ ccspk hook -h
+Usage: ccspk hook [OPTIONS]
+
+  Stop・MessageDisplay・PreToolUse フック。標準入力のフックの入力を読み、返答の冒頭を読み上げる。
+
+Options:
+  -h, --help  Show this message and exit.
+rc=0
+
+--- final diff
+rc=0
+DICT SAME
