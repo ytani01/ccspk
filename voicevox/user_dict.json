@@ -52,7 +52,7 @@
   },
   "3a1824ad-c348-4ed1-933b-f5f19427c582": {
     "accent_associative_rule": "*",
-    "accent_type": 1,
+    "accent_type": 0,
     "context_id": 1348,
     "inflectional_form": "*",
     "inflectional_type": "*",
@@ -83,6 +83,23 @@
     "stem": "*",
     "surface": "ｊｓｏｎ",
     "yomi": "ジェイソン"
+  },
+  "5875cf9a-cb7a-4826-9b06-43b5ee91b4e6": {
+    "accent_associative_rule": "*",
+    "accent_type": 5,
+    "context_id": 1345,
+    "inflectional_form": "*",
+    "inflectional_type": "*",
+    "mora_count": 8,
+    "part_of_speech": "名詞",
+    "part_of_speech_detail_1": "一般",
+    "part_of_speech_detail_2": "*",
+    "part_of_speech_detail_3": "*",
+    "priority": 5,
+    "pronunciation": "ケンショウタントウ",
+    "stem": "*",
+    "surface": "Ｖｅｒｉｆｉｅｒ",
+    "yomi": "ケンショウタントウ"
   },
   "5c48dfa4-6b02-4843-9ae5-3ca19ffc11a2": {
     "accent_associative_rule": "*",
@@ -168,6 +185,23 @@
     "stem": "*",
     "surface": "空にならない",
     "yomi": "カラニナラナイ"
+  },
+  "ac174158-5469-45a4-8cd4-4aa95444b8d1": {
+    "accent_associative_rule": "*",
+    "accent_type": 4,
+    "context_id": 1345,
+    "inflectional_form": "*",
+    "inflectional_type": "*",
+    "mora_count": 7,
+    "part_of_speech": "名詞",
+    "part_of_speech_detail_1": "一般",
+    "part_of_speech_detail_2": "*",
+    "part_of_speech_detail_3": "*",
+    "priority": 5,
+    "pronunciation": "レビュータントウ",
+    "stem": "*",
+    "surface": "Ｒｅｖｉｅｗｅｒ",
+    "yomi": "レビュータントウ"
   },
   "d94404c9-c609-4348-bc9e-a47bc96a5517": {
     "accent_associative_rule": "*",
