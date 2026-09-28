@@ -59,14 +59,73 @@ TODO-022 の改名を先にやる（パスが `~/.config/ccspk/` になるため
   対象は `rg -n -i -e claudecodespeak -e claude-tts --hidden -g '!.git' -g '!archives'`
 - [ ] `~/.claude/settings.json` のフックのコマンド（2 か所）を `ccspk hook` にし、
   `uv tool install .` と `uv tool uninstall claudecodespeak` で入れ替える（Claude がやる）
-- [ ] GitHub の改名、`git remote set-url`、`~/work/claudecodespeak` の改名と
-  systemd の unit の symlink の張り直しは、コマンドを提示して利用者がやる
+- [ ] リポジトリの外の残り（下の「利用者がやること」）は、コミットのあと利用者がやる
 
 `archives/` と過去のコミットメッセージの旧名は、記録なので直さない。
 挙動は名前以外変わらないので reviewer は置かない。verifier には、旧名が残っていないこと、
 `ccspk test` が通ること、入れ替えたあとのフックで読み上げが鳴ることを確かめさせる。
 切り替えの瞬間に鳴っている旧名の読み上げは、新しいフックから止められない（`stop_playing()` は
 `MODULE` で見分ける。一度きりなので対処しない）。
+
+### 利用者がやること
+
+Claude の作業（上の 4 つ）のコミットが済んでから、この順にやる。**1 の前に Claude Code を
+終了する**（作業ディレクトリが消えるため）。
+
+1. GitHub のリポジトリを改名し、remote を向け直す
+
+   ```sh
+   cd ~/work/claudecodespeak
+   gh repo rename ccspk -R ytani01/claudecodespeak
+   git remote set-url origin git@github.com:ytani01/ccspk.git
+   git remote -v   # ytani01/ccspk.git になっていること
+   ```
+
+2. 手元のディレクトリと、Claude Code のプロジェクトのディレクトリ（メモリの置き場所）を改名する
+
+   ```sh
+   \mv ~/work/claudecodespeak ~/work/ccspk
+   \mv ~/.claude/projects/-home-ytani-work-claudecodespeak ~/.claude/projects/-home-ytani-work-ccspk
+   ```
+
+3. `.venv` を作り直す（中のスクリプトの 1 行目が `/home/ytani/work/claudecodespeak/.venv/bin/python`
+   を指しているため）
+
+   ```sh
+   cd ~/work/ccspk
+   \rm -rf .venv && uv sync
+   ```
+
+4. `uv tool` を入れ直す（`~/.local/share/uv/tools/ccspk/uv-receipt.toml` が旧いディレクトリを
+   指したままになるため）
+
+   ```sh
+   uv tool install --reinstall .
+   ```
+
+5. systemd の unit を張り直す。今は次の 2 つが旧いパスを指している
+   - `~/.config/systemd/user/voicevox-engine.service`
+   - `~/.config/systemd/user/default.target.wants/voicevox-engine.service`
+
+   ```sh
+   \rm ~/.config/systemd/user/voicevox-engine.service ~/.config/systemd/user/default.target.wants/voicevox-engine.service
+   systemctl --user daemon-reload
+   systemctl --user link ~/work/ccspk/systemd/voicevox-engine.service
+   systemctl --user enable voicevox-engine.service
+   systemctl --user status voicevox-engine.service   # active (running) のまま
+   ```
+
+   エンジンは動いたままでよい（unit ファイルの中身は変わらない）。
+
+6. 確かめる
+
+   ```sh
+   command -v ccspk            # ~/.local/bin/ccspk
+   command -v claudecodespeak  # 何も出ない
+   ccspk status
+   ```
+
+   Claude Code を `~/work/ccspk` で起動し直し、返答が読み上げられること。
 
 ---
 
