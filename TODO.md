@@ -76,8 +76,34 @@ TODO-022 の改名を先にやる（パスが `~/.config/ccspk/` になるため
     `systemctl --user daemon-reload`・`link ~/work/ccspk/systemd/voicevox-engine.service`・
     `enable voicevox-engine.service`。エンジンは止めない（unit ファイルの中身は変わらない）
   - 最後に `command -v ccspk`、`command -v claudecodespeak` が空であること、`ccspk status` を表示する
-- [ ] 利用者に、Claude Code を終了して `~/work/claudecodespeak/archives/agents/TODO-022/move-dir.sh` を
-  走らせ、`~/work/ccspk` で起動し直して読み上げが鳴るか確かめるよう伝える
+- [ ] 利用者に、下の「利用者がやること」を伝える
+
+### 利用者がやること
+
+Claude の作業のコミットが済んでから、この順にやる。
+
+1. Claude Code を終了する（`/exit`）
+2. 端末で次を走らせる
+
+   ```sh
+   ~/work/claudecodespeak/archives/agents/TODO-022/move-dir.sh
+   ```
+
+3. 最後の表示を見る
+   - `command -v ccspk` が `~/.local/bin/ccspk`
+   - `command -v claudecodespeak` が何も出さない
+   - `ccspk status` がエンジンを使えると言っている
+4. 途中で止まったら、表示されたメッセージを控えて、`~/work/claudecodespeak` か `~/work/ccspk` の
+   残っているほうで Claude Code を起動し、そのメッセージを渡す
+5. 新しいディレクトリで Claude Code を起動し直す
+
+   ```sh
+   cd ~/work/ccspk && claude
+   ```
+
+6. 何か話しかけて、返答が読み上げられることを確かめる
+7. `/memory` などで、前のメモリ（「文書の変更も TODO に立てる」など）が引き継がれていることを確かめる
+8. 確かめた結果を Claude に伝える（Claude が TODO-022 を決着させる）
 
 `archives/` と過去のコミットメッセージの旧名は、記録なので直さない。
 挙動は名前以外変わらないので reviewer は置かない。verifier には、旧名が残っていないこと、
