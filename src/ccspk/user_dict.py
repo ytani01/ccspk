@@ -9,11 +9,13 @@
 
 `add` はアクセントの位置を、読みを /audio_query に渡してエンジンに任せる。
 同じ表記が登録済みなら、読みを書き換える。登録後の読みを表示し、--speak で鳴らす。
-`export`/`import` は voicevox/user_dict.json への書き戻し・読み込みに使う
-（docs/UsersGuide.md の「辞書をリポジトリに保存する」）。
+`add`・`remove`・`import` が成功したら、エンジンの辞書を DICT_FILE
+（~/.config/ccspk/user_dict.json）へ書き出す。エンジンの起動時に systemd がこれを `import` する
+（systemd/voicevox-engine.service の ExecStartPost）。
 """
 
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -21,6 +23,7 @@ import unicodedata
 import urllib.error
 import urllib.parse
 import urllib.request
+from pathlib import Path
 
 import click
 
@@ -30,6 +33,7 @@ _log = getLogger("dict")
 
 ENGINE = "http://127.0.0.1:50021"
 SPEAKER = 119  # 夜語トバリ（明るい）。hook.py と揃える
+DICT_FILE = Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config") / "ccspk" / "user_dict.json"
 # 品詞。エンジンは word_type を品詞の組にして持つので、書き換えるときはここから引き戻す
 TYPES = {
     ("名詞", "固有名詞"): "PROPER_NOUN",
@@ -88,6 +92,25 @@ def find(surface):
     return next(((i, w) for i, w in words.items() if unicodedata.normalize("NFKC", w["surface"]) == key), (None, None))
 
 
+def dump(file):
+    """エンジンの辞書を JSON で書く。表記は半角にする（import するとエンジンが全角に直す）。"""
+    words = json.loads(call("GET", "/user_dict"))
+    for w in words.values():
+        w["surface"] = halfwidth(w["surface"])
+    json.dump(words, file, indent=2, sort_keys=True, ensure_ascii=False)
+    file.write("\n")
+
+
+def save():
+    """エンジンの辞書を DICT_FILE へ書き出す。書きかけで落ちても前のファイルが残るよう、一時ファイルから置き換える。"""
+    DICT_FILE.parent.mkdir(parents=True, exist_ok=True)
+    tmp = DICT_FILE.with_suffix(".tmp")
+    with tmp.open("w", encoding="utf-8") as f:
+        dump(f)
+    tmp.replace(DICT_FILE)
+    print(f"書き出した: {DICT_FILE}")
+
+
 def demo():
     def ph(accent, moras):
         return {"accent": accent, "moras": [{}] * moras}
@@ -130,6 +153,7 @@ def add(surface, pronunciation, accent, type_, priority, speak):
         extra = {} if priority is None else {"priority": priority}  # 省けばエンジンの既定（5）
         uuid = json.loads(call("POST", "/user_dict_word", **word, **extra, word_type=type_ or "PROPER_NOUN"))
         print(f"登録した: {surface} → {pronunciation}（accent_type {accent}、ID {uuid}）")
+    save()
     q = query(surface)
     print(f"読み: {q['kana']}")
     if speak:
@@ -164,20 +188,17 @@ def remove(surface):
         sys.exit(f"登録されていない: {surface}")
     call("DELETE", f"/user_dict_word/{uuid}")
     print(f"消した: {surface}（ID {uuid}）")
+    save()
 
 
 @dict_group.command("export")
 @click.argument("file", type=click.File("w", encoding="utf-8"), default="-")
 def export(file):
-    """辞書を書き出す。FILE を省くと標準出力。voicevox/user_dict.json と同じ形にする。
+    """辞書を書き出す。FILE を省くと標準出力。~/.config/ccspk/user_dict.json と同じ形にする。
 
     表記は半角にする（import するとエンジンが全角に直す）。
     """
-    words = json.loads(call("GET", "/user_dict"))
-    for w in words.values():
-        w["surface"] = halfwidth(w["surface"])
-    json.dump(words, file, indent=2, sort_keys=True, ensure_ascii=False)
-    file.write("\n")
+    dump(file)
 
 
 @dict_group.command("import")
@@ -186,3 +207,4 @@ def import_(file):
     """辞書を読み込む。FILE を省くと標準入力。同じ ID の単語は上書きする。"""
     call("POST", "/import_user_dict", data=file.read(), override="true")
     print("読み込んだ")
+    save()

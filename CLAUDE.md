@@ -20,6 +20,7 @@ uv tool install .         # 利用者の環境へ入れる
 - 整形や分割を変えたら `demo()` に例を足す
 - フックを手で動かすときは、本物の `$XDG_RUNTIME_DIR` を使わない（読み上げが止まったままに
   なったり、鳴っている読み上げを止めたりする）。手順は `docs/Developer.md` の「フックを手で動かす」
-- `dict add` で単語を足したら、`dict export` でエンジンから `voicevox/user_dict.json` に
-  書き出してコミットする（`docs/UsersGuide.md` の「辞書をリポジトリに保存する」）
+- 辞書はリポジトリに置かない。`dict add`・`remove`・`import` が `~/.config/ccspk/user_dict.json` へ
+  書き出し、エンジンの起動時に読み込む（`docs/UsersGuide.md` の「辞書のファイル」）。
+  試すときは `XDG_CONFIG_HOME` を一時ディレクトリに向ける
 - git のコミットメッセージにある TODO の番号は旧番号（`README.md` の「TODO の番号」）

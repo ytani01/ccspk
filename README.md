@@ -11,7 +11,6 @@ Claude Code の返答の冒頭を、手元の VOICEVOX で読み上げるフッ�
 | `src/ccspk/user_dict.py` | `ccspk dict`。VOICEVOX のユーザー辞書を操作する |
 | `src/ccspk/cli.py` | サブコマンドをまとめる |
 | `systemd/voicevox-engine.service` | VOICEVOX のエンジンを常駐させる user unit |
-| `voicevox/user_dict.json` | VOICEVOX のユーザー辞書を書き出したもの（読み間違える単語の読み） |
 | `docs/UsersGuide.md` | インストール、Claude Code の設定、読み上げの無効化、読み上げの辞書の扱い方 |
 | `docs/Developer.md` | 動き方の細かい決まり、フックの仕組み、テストと動作の確かめ方 |
 

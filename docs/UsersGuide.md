@@ -34,8 +34,9 @@ curl -s http://127.0.0.1:50021/version   # "0.25.2" が返れば起動してい�
 unit ファイルのパスを揃えて書き換え、`systemctl --user daemon-reload` してから
 再起動する。
 
-エンジンをインストールしたら、読み間違える単語の辞書を読み込む
-（[リポジトリの辞書を読み込む](#リポジトリの辞書を読み込む) の手順）。
+エンジンが起動するたびに、`~/.config/ccspk/user_dict.json` があれば辞書に読み込む
+（unit ファイルの `ExecStartPost`。`~/.local/bin/ccspk` を使うので、先に `ccspk` を
+インストールしておく）。詳しくは [辞書のファイル](#辞書のファイル)。
 
 整形が正しく動くかは、次の自己テストで確認できる。
 
@@ -144,10 +145,9 @@ ccspk status --clear
 ## 読み上げの辞書
 
 返答の読み上げ（`ccspk hook`）で読み間違える単語は、VOICEVOX の
-エンジンのユーザー辞書で読みを直す。辞書はエンジンの中にあり、書き出したものを
-`voicevox/user_dict.json` としてリポジトリに置いている。登録・一覧・削除・
-書き出し・読み込みは、どれも `ccspk dict` のサブコマンドで行う
-（`dict export` と `dict import` の例は、リポジトリの直下で走らせる）。
+エンジンのユーザー辞書で読みを直す。登録・一覧・削除・書き出し・読み込みは、
+どれも `ccspk dict` のサブコマンドで行う。辞書の中身は `~/.config/ccspk/user_dict.json` にも
+書き出していて、エンジンの起動時にそこから読み込む（[辞書のファイル](#辞書のファイル)）。
 
 ### 読みを確認する
 
@@ -182,7 +182,6 @@ ccspk dict add README リードミー --speak
   負けている。優先度を上げて登録し直す（「節」は 5 ではフシのままで、7 でセツになった）
 - 英字は大文字と小文字を別の単語として扱う。両方直すなら両方登録する
   （`JSON` と `json`）
-- `voicevox/user_dict.json` への書き戻しはしない（下の「辞書をリポジトリに保存する」）
 
 ### 登録した単語を一覧・削除する
 
@@ -194,23 +193,28 @@ ccspk dict remove README
 `dict list` は ID・表記・読み・`accent_type`・優先度を表記順に並べる。読みを変えるときは、
 `dict add` に同じ表記で渡す。
 
-### 辞書をリポジトリに保存する
+### 辞書のファイル
 
-登録や削除をしたら、辞書のファイルを書き出してコミットする。
+辞書のファイルは `~/.config/ccspk/user_dict.json`（`$XDG_CONFIG_HOME` があれば
+`$XDG_CONFIG_HOME/ccspk/user_dict.json`）。表記は半角で書く。
+
+- `dict add`・`dict remove`・`dict import` が成功すると、エンジンの辞書をこのファイルへ
+  書き出す（`dict export` と同じ形）。手で書き出す必要は無い
+- エンジンが起動するたびに、このファイルを `dict import` で読み込む。エンジンの版を上げたり
+  入れ直したりしても、辞書は戻る。エンジンが 10 秒で応答しないときは読み込まずに
+  あきらめる（エンジンは止めない）。そのときは `journalctl --user -u voicevox-engine` で理由を見る
+- 別のマシンへは、このファイルを写してからエンジンを再起動する（または `dict import` する）
+
+`dict import` は、同じ ID の単語があれば上書きする。エンジンにあってファイルに無い単語は
+消えずに残り、そのまま次の書き出しでファイルにも入る。
+
+ファイルとは別の場所へ書き出す・読み込むときは、`dict export` と `dict import` にパスを渡す
+（省くと標準出力・標準入力）。
 
 ```sh
-ccspk dict export voicevox/user_dict.json
+ccspk dict export backup.json
+ccspk dict import backup.json
 ```
-
-### リポジトリの辞書を読み込む
-
-エンジンを再インストールしたときや、別のマシンでは、辞書のファイルを読み込む。
-
-```sh
-ccspk dict import voicevox/user_dict.json
-```
-
-同じ ID の単語があれば上書きする。辞書にあってファイルに無い単語は消えずに残る。
 
 ### 記号と数字
 
