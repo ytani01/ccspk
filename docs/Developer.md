@@ -1,7 +1,8 @@
 # 開発者向け
 
-フックのコードは `hooks/speak-response.py` の 1 ファイルだけ（辞書に語を足す
-`voicevox/add-word.py` は別に動く）。依存は Python の標準ライブラリ、
+コードは `src/claudecodespeak/` にあり、コマンド `claudecodespeak` のサブコマンドに分かれる
+（`cli.py` がまとめる）。フックは `hook.py`（`claudecodespeak hook`）、辞書に語を足すのは
+`add_word.py`（`claudecodespeak add-word`）。依存は click、loguru、
 VOICEVOX のエンジン（`127.0.0.1:50021`）、`pw-play`。読み上げの範囲や切り方など、
 利用者から見た動きは下の「動き方」、入れ方と辞書は
 [UsersGuide](UsersGuide.md) にある。
@@ -43,18 +44,18 @@ VOICEVOX のエンジン（`127.0.0.1:50021`）、`pw-play`。読み上げの範
 ### 流れ
 
 Claude Code は、返答を終えるたびに Stop フックとして、文章を表示するたびに
-MessageDisplay フックとしてこのスクリプトを起動し、標準入力に JSON を渡す。
+MessageDisplay フックとして `claudecodespeak hook` を起動し、標準入力に JSON を渡す。
 使うのは、Stop なら `last_assistant_message`（最後の返答の本文）、MessageDisplay なら
 `message_id`・`index`・`delta`・`final`。MessageDisplay は 1 つの文章を `index` ごとの分
 （`delta`）に分けて渡し、最後の分に `final: true` が付く。フックは並んで走り、後ろの分が
 先に届くこともある。`agent_id` があるとき（サブエージェント）は読まない。
 
-`main()` は引数で 3 つに分かれる。
+`hook.py` の `main()`（`claudecodespeak hook`）は引数で 3 つに分かれる。
 
 | 起動のされ方 | 動き |
 |---|---|
 | `--test` | `demo()` の自己テストを走らせる |
-| `--play <本文>` | 子プロセスとして、合成と再生をする（`play()`） |
+| `--play <本文>` | 合成と再生だけをする（`play()`）。子プロセスと同じ動き |
 | 引数なし | フックとして動く（下の順） |
 
 フックとしては、次の順に進む。どこかで条件を満たさなければ、そこで終わる。
@@ -76,7 +77,8 @@ MessageDisplay フックとしてこのスクリプトを起動し、標準入�
 
 ### 子プロセス
 
-`speak()` は、同じスクリプトを `--play <本文>` で起動する。
+`speak()` は、`python -P -m claudecodespeak.hook --play <本文>` で子プロセスを起こす。
+`-P` は、Claude Code の作業ディレクトリを `sys.path` に入れないため。
 `start_new_session=True` で新しいセッション（兼プロセスグループ）にするので、
 子プロセスが起こした `pw-play` まで、グループごと止められる。
 
@@ -97,7 +99,7 @@ MessageDisplay フックとしてこのスクリプトを起動し、標準入�
 `stop_playing()` は `PIDFILE` の PID を読み、ファイルを消してから、
 そのプロセスグループに `SIGTERM` を送る。再生が終わったあとで PID が別の
 プロセスに使い回されていることがあるので、`/proc/<pid>/cmdline` に `--play` と
-このスクリプトの名前があるときだけ送る。
+`claudecodespeak.hook` があるときだけ送る（子プロセスの起こし方は上の「子プロセス」）。
 
 ### 使えないと覚える
 
@@ -160,8 +162,8 @@ MessageDisplay フックとしてこのスクリプトを起動し、標準入�
 `demo()` の `assert` で確かめている。通れば `ok` と出る。
 
 ```sh
-python3 hooks/speak-response.py --test
-python3 voicevox/add-word.py --test   # アクセントの位置の決め方（accent_of）
+uv run claudecodespeak hook --test
+uv run claudecodespeak add-word --test   # アクセントの位置の決め方（accent_of）
 ```
 
 MessageDisplay の分をつなぐ `assemble()` も、一時ディレクトリで確かめている。
@@ -170,7 +172,8 @@ MessageDisplay の分をつなぐ `assemble()` も、一時ディレクトリで
 
 ### Stop を手で再現する
 
-コマンドは、どれもリポジトリの直下で走らせる。
+コマンドは、どれもリポジトリの直下で走らせる。`uv sync` で `.venv` に入れておき、
+入れ直さずに手元のコードを試すため `.venv/bin/claudecodespeak` を呼ぶ。
 
 本物の `$XDG_RUNTIME_DIR` で試して `claude-tts.unusable` が残ると、ファイルを
 消すまで読み上げが止まる（[UsersGuide](UsersGuide.md#使えないと覚えたとき)）。
@@ -182,7 +185,7 @@ MessageDisplay の分をつなぐ `assemble()` も、一時ディレクトリで
 tmp=$(mktemp -d)
 echo '{"last_assistant_message":"確認です。二つ目の文です。"}' \
   | CLAUDE_TTS_SPEAK=1 XDG_RUNTIME_DIR=$tmp PIPEWIRE_RUNTIME_DIR=/run/user/$(id -u) \
-    python3 hooks/speak-response.py
+    .venv/bin/claudecodespeak hook
 find $tmp -type f
 rm -r $tmp
 ```
@@ -196,13 +199,12 @@ rm -r $tmp
 使えないと判定したときは、`$tmp/claude-tts.unusable` ができ、中身が理由になる。
 
 `pw-play` が無いときを再現するなら、別の一時ディレクトリで、`PATH` を空にする。
-`python3` は、mise などの shim だと `PATH` が空では動かないので、本体のパスで呼ぶ。
+`.venv/bin/claudecodespeak` は Python を絶対パスで呼ぶので、`PATH` が空でも動く。
 
 ```sh
 tmp=$(mktemp -d)
-py=$(python3 -c 'import sys; print(sys.executable)')
 echo '{"last_assistant_message":"確認です。"}' \
-  | CLAUDE_TTS_SPEAK=1 XDG_RUNTIME_DIR=$tmp PATH=/nonexistent "$py" hooks/speak-response.py
+  | CLAUDE_TTS_SPEAK=1 XDG_RUNTIME_DIR=$tmp PATH=/nonexistent .venv/bin/claudecodespeak hook
 cat $tmp/claude-tts.unusable   # pw-play が無い
 rm -r $tmp
 ```
@@ -211,7 +213,7 @@ rm -r $tmp
 子プロセスを直接起動して、合成と再生だけを試す（整形は通らない）。
 
 ```sh
-python3 hooks/speak-response.py --play '合成と再生だけを試す。'
+.venv/bin/claudecodespeak hook --play '合成と再生だけを試す。'
 ```
 
 ### 最初の音までの時間
@@ -229,7 +231,7 @@ tmp = tempfile.mkdtemp()
 env = {**os.environ, "CLAUDE_TTS_SPEAK": "1", "XDG_RUNTIME_DIR": tmp,
        "PIPEWIRE_RUNTIME_DIR": f"/run/user/{os.getuid()}"}
 t0 = time.monotonic()
-subprocess.run(["python3", "hooks/speak-response.py"], text=True, env=env, check=True,
+subprocess.run([".venv/bin/claudecodespeak", "hook"], text=True, env=env, check=True,
                input=json.dumps({"last_assistant_message": "最初の音までを測る、短い文です。"}))
 pid = Path(tmp, "claude-tts.pid")
 if not pid.exists():

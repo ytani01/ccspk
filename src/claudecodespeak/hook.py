@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Stop / MessageDisplay hook: Claude の返答を VOICEVOX で読み上げる。
 
 Stop では最後の返答を、MessageDisplay ではツールを呼ぶ前などの途中の文章を読む。
@@ -25,6 +24,10 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
+import click
+
+from .mylog import getLogger
+
 LIMIT = 180  # 読み上げるのはおよそここまで。超えるときは次の文末（無ければ読点）まで
 # 延ばすのはここまで。句点の無い英語の返答 2,339 字を 1 回で合成しようとして、
 # エンジンのメモリが 7.8 GB まで膨らみ kill されたことがある
@@ -34,6 +37,7 @@ COMMAS = "、，"  # 読点。半角の「,」は 1,000 のような数字の中
 SPEAKER = 119  # 夜語トバリ（明るい）
 ENGINE = "http://127.0.0.1:50021"
 PLAY = "--play"  # 合成と再生を受け持つ子プロセスの目印
+MODULE = "claudecodespeak.hook"  # 子プロセスは python -m でこのモジュールを起こす。stop_playing() はこれで見分ける
 # 1 文目を短く切る区切り。読点・閉じ括弧・コロンの後ろ、開き括弧の前。
 # 半角の「,」は 1,000、「:」は 12:30、「(」は name() のように語の中にも出るので、
 # 「,」は入れず、「:」は英数字が続くとき、「(」は英数字の直後のときは切らない
@@ -55,6 +59,8 @@ PARTS_KEEP = 600  # そろわないまま残った分は、この秒数で消す
 # 読んでからこの秒数のうちに同じ文が来たら読まない。MessageDisplay と Stop は 0.01 秒差で来た。
 # 長くすると、続けて同じ返答（「はい。」など）が来たときに黙ってしまう
 SAME_WITHIN = 5
+
+_log = getLogger("hook")
 
 
 def unusable():
@@ -123,7 +129,7 @@ def stop_playing():
         PIDFILE.unlink()
         # 再生が終わった後に番号が別のプロセスへ使い回されていたら触らない
         args = Path(f"/proc/{pid}/cmdline").read_bytes().split(b"\0")
-        if PLAY.encode() not in args or not any(a.endswith(Path(__file__).name.encode()) for a in args):
+        if PLAY.encode() not in args or MODULE.encode() not in args:
             return
         os.killpg(pid, signal.SIGTERM)
     except (OSError, ValueError):
@@ -233,7 +239,8 @@ def play(text):
 def speak(text):
     """合成と再生を子プロセスに投げ、その PID を残す。"""
     p = subprocess.Popen(
-        [sys.executable, __file__, PLAY, text],
+        # -P: 作業ディレクトリを sys.path に入れない（そこに click.py などがあると、それを import してしまう）
+        [sys.executable, "-P", "-m", MODULE, PLAY, text],
         start_new_session=True,
         stdin=subprocess.DEVNULL,
         stdout=subprocess.DEVNULL,
@@ -353,12 +360,16 @@ def demo():
     print("ok")
 
 
-def main():
-    if sys.argv[1:2] == ["--test"]:
+@click.command()
+@click.option("--test", is_flag=True, help="置き換えと切り方の自己チェックを走らせる")
+@click.option(PLAY, "play_text", metavar="TEXT", help="合成と再生だけを試す（子プロセスと同じ動き）")
+def main(test, play_text):
+    """Stop・MessageDisplay フック。標準入力のフックの入力を読み、返答の冒頭を読み上げる。"""
+    if test:
         demo()
         return
-    if sys.argv[1:2] == [PLAY]:
-        play(sys.argv[2])
+    if play_text is not None:
+        play(play_text)
         return
     if os.environ.get("CLAUDE_TTS_SPEAK") != "1" or UNUSABLE.exists():
         return
@@ -373,6 +384,7 @@ def main():
     except (json.JSONDecodeError, OSError):
         return
     display = payload.get("hook_event_name") == "MessageDisplay"
+    _log.debug(f"event={payload.get('hook_event_name')}")
     if display and payload.get("agent_id"):
         return
     try:
@@ -411,4 +423,6 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    # speak() が起こす子プロセス。click と loguru の設定を通さない
+    if sys.argv[1:2] == [PLAY]:
+        play(sys.argv[2])

@@ -1,14 +1,12 @@
-#!/usr/bin/env python3
 """VOICEVOX のエンジンのユーザー辞書に語を足す。
 
-  add-word.py <表記> <読み（カタカナ）> [--accent N] [--type TYPE] [--speak]
+  claudecodespeak add-word <表記> <読み（カタカナ）> [--accent N] [--type TYPE] [--speak]
 
 アクセントの位置は、読みを /audio_query に渡してエンジンに任せる。
 同じ表記が登録済みなら、読みを書き換える。登録後の読みを表示し、--speak で鳴らす。
 voicevox/user_dict.json への書き戻しはしない（docs/UsersGuide.md の「リポジトリに残す」）。
 """
 
-import argparse
 import json
 import shutil
 import subprocess
@@ -18,8 +16,14 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
+import click
+
+from .mylog import getLogger
+
+_log = getLogger("add-word")
+
 ENGINE = "http://127.0.0.1:50021"
-SPEAKER = 119  # 夜語トバリ（明るい）。hooks/speak-response.py と揃える
+SPEAKER = 119  # 夜語トバリ（明るい）。hook.py と揃える
 # 品詞。エンジンは word_type を品詞の組にして持つので、書き換えるときはここから引き戻す
 TYPES = {
     ("名詞", "固有名詞"): "PROPER_NOUN",
@@ -74,31 +78,39 @@ def demo():
     print("ok")
 
 
-def main():
-    if sys.argv[1:] == ["--test"]:
-        return demo()
-    p = argparse.ArgumentParser(description="VOICEVOX のユーザー辞書に語を足す")
-    p.add_argument("surface", help="表記（英字は大文字と小文字を別の語として扱う）")
-    p.add_argument("pronunciation", help="読み（カタカナ）")
-    p.add_argument("--accent", type=int, help="音が下がる直前の音が頭から何番目か。0 は平板。省くとエンジンに任せる")
-    p.add_argument("--type", choices=TYPES.values(), help="品詞。省くと、新しい語は PROPER_NOUN、登録済みの語は今の品詞のまま")
-    p.add_argument("--speak", action="store_true", help="登録後に表記を読み上げて確かめる")
-    a = p.parse_args()
+def _test(ctx, _param, value):
+    if value:
+        demo()
+        ctx.exit()
 
+
+@click.command()
+@click.argument("surface")
+@click.argument("pronunciation")
+@click.option("--accent", type=int, help="音が下がる直前の音が頭から何番目か。0 は平板。省くとエンジンに任せる")
+@click.option("--type", "type_", type=click.Choice(list(TYPES.values())), help="品詞。省くと、新しい語は PROPER_NOUN、登録済みの語は今の品詞のまま")
+@click.option("--speak", is_flag=True, help="登録後に表記を読み上げて確かめる")
+@click.option("--test", is_flag=True, is_eager=True, expose_value=False, callback=_test, help="accent_of の自己チェックを走らせる")
+def main(surface, pronunciation, accent, type_, speak):
+    """VOICEVOX のユーザー辞書に語を足す。
+
+    SURFACE は表記（英字は大文字と小文字を別の語として扱う）、PRONUNCIATION は読み（カタカナ）。
+    """
     try:
-        accent = a.accent if a.accent is not None else accent_of(query(a.pronunciation)["accent_phrases"])
-        word = dict(surface=a.surface, pronunciation=a.pronunciation, accent_type=accent)
-        uuid, old = find(a.surface)
+        accent = accent if accent is not None else accent_of(query(pronunciation)["accent_phrases"])
+        word = dict(surface=surface, pronunciation=pronunciation, accent_type=accent)
+        _log.debug(f"word={word}")
+        uuid, old = find(surface)
         if uuid:
             kept = TYPES.get((old["part_of_speech"], old["part_of_speech_detail_1"]), "PROPER_NOUN")
-            call("PUT", f"/user_dict_word/{uuid}", **word, word_type=a.type or kept, priority=old["priority"])
-            print(f"書き換えた: {a.surface} → {a.pronunciation}（accent_type {accent}、ID {uuid}）")
+            call("PUT", f"/user_dict_word/{uuid}", **word, word_type=type_ or kept, priority=old["priority"])
+            print(f"書き換えた: {surface} → {pronunciation}（accent_type {accent}、ID {uuid}）")
         else:
-            uuid = json.loads(call("POST", "/user_dict_word", **word, word_type=a.type or "PROPER_NOUN"))
-            print(f"登録した: {a.surface} → {a.pronunciation}（accent_type {accent}、ID {uuid}）")
-        q = query(a.surface)
+            uuid = json.loads(call("POST", "/user_dict_word", **word, word_type=type_ or "PROPER_NOUN"))
+            print(f"登録した: {surface} → {pronunciation}（accent_type {accent}、ID {uuid}）")
+        q = query(surface)
         print(f"読み: {q['kana']}")
-        if a.speak:
+        if speak:
             if not shutil.which("pw-play"):
                 sys.exit("pw-play が無いので鳴らせない（登録は済んだ）")
             wav = call("POST", "/synthesis", data=json.dumps(q).encode(), speaker=SPEAKER)
@@ -109,6 +121,3 @@ def main():
     except OSError as e:  # URLError と、読み出し中の TimeoutError
         sys.exit(f"エンジン（{ENGINE}）とやり取りできない: {getattr(e, 'reason', e)}")
 
-
-if __name__ == "__main__":
-    main()

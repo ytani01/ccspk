@@ -2,12 +2,15 @@
 
 ## 入れ方
 
-リポジトリは `~/work/claudecodespeak` に clone する（フックの設定と下の手順の
-コマンドは、このパスを前提にしている）。
+リポジトリは `~/work/claudecodespeak` に clone する（下の手順のコマンドは、
+このパスを前提にしている）。コマンド `claudecodespeak` は `uv tool install` で入れる。
 
 ```sh
 git clone git@github.com:ytani01/claudecodespeak.git ~/work/claudecodespeak
+uv tool install ~/work/claudecodespeak
 ```
+
+コードを直したら、`uv tool install --reinstall ~/work/claudecodespeak` で入れ直す。
 
 ### エンジン
 
@@ -37,15 +40,17 @@ unit ファイルのパスを揃えて書き換え、`systemctl --user daemon-re
 整形の自己テストは次で走る。
 
 ```sh
-python3 ~/work/claudecodespeak/hooks/speak-response.py --test
+claudecodespeak hook --test
 ```
 
 ### Claude Code のフック
 
 `~/.claude/settings.json` の `hooks` に Stop フックと MessageDisplay フックを足し、
-`env` で `CLAUDE_TTS_SPEAK` を `1` にする。clone していないマシンでは何もしない。
+`env` で `CLAUDE_TTS_SPEAK` を `1` にする。`claudecodespeak` を入れていないマシンでは何もしない。
 Stop は返答の最後の文章を、MessageDisplay はツールを呼ぶ前などの途中の文章を読む。
 途中の文章が要らなければ、MessageDisplay は足さない。
+`claudecodespeak` は `PATH` から探すので、入れたのに鳴らないときは、Claude Code を
+起動するシェルで `command -v claudecodespeak` が見つかるかを確かめる。
 
 ```json
 "env": {
@@ -57,7 +62,7 @@ Stop は返答の最後の文章を、MessageDisplay はツールを呼ぶ前な
       "hooks": [
         {
           "type": "command",
-          "command": "f=\"$HOME/work/claudecodespeak/hooks/speak-response.py\"; [ ! -f \"$f\" ] || python3 \"$f\"",
+          "command": "! command -v claudecodespeak >/dev/null || claudecodespeak hook",
           "timeout": 5
         }
       ]
@@ -68,7 +73,7 @@ Stop は返答の最後の文章を、MessageDisplay はツールを呼ぶ前な
       "hooks": [
         {
           "type": "command",
-          "command": "f=\"$HOME/work/claudecodespeak/hooks/speak-response.py\"; [ ! -f \"$f\" ] || python3 \"$f\"",
+          "command": "! command -v claudecodespeak >/dev/null || claudecodespeak hook",
           "timeout": 5
         }
       ]
@@ -113,7 +118,7 @@ rm "$XDG_RUNTIME_DIR/claude-tts.unusable"
 
 ## 読み上げの辞書
 
-返答の読み上げ（`hooks/speak-response.py`）で読み間違える語は、VOICEVOX の
+返答の読み上げ（`claudecodespeak hook`）で読み間違える語は、VOICEVOX の
 エンジンのユーザー辞書で読みを直す。辞書はエンジンの中にあり、その元を
 `voicevox/user_dict.json` に置いている。
 
@@ -133,18 +138,18 @@ curl -s -X POST -G http://127.0.0.1:50021/audio_query \
 
 ### 登録する
 
-`voicevox/add-word.py` に表記と読みを渡す。アクセントの位置はエンジンに任せ、
+`claudecodespeak add-word` に表記と読みを渡す。アクセントの位置はエンジンに任せ、
 登録後の読みを表示する。同じ表記が登録済みなら、読みを書き換える（品詞と優先度は
 今のまま）。
 
 ```sh
-voicevox/add-word.py README リードミー --speak
+claudecodespeak add-word README リードミー --speak
 ```
 
 - `--speak` を付けると、登録後に表記を読み上げる
 - 表示した読みのアクセントが違えば、`--accent` で位置を指定して登録し直す
 - エンジンは、1 語だけでは平板と尾高（最後の音の後で下がる）を見分けない。
-  そのため `add-word.py` は、句が 1 つで最後の音で下がるときは平板（`0`）として
+  そのため `add-word` は、句が 1 つで最後の音で下がるときは平板（`0`）として
   登録する。尾高の語は `--accent <音の数>` で登録し直す
 - 品詞は `--type`。省くと、新しい語は `PROPER_NOUN`、登録済みの語は今の品詞のまま
 - `voicevox/user_dict.json` への書き戻しはしない（下の「リポジトリに残す」）
@@ -178,7 +183,7 @@ curl -s http://127.0.0.1:50021/user_dict \
 curl -s -X DELETE http://127.0.0.1:50021/user_dict_word/<ID>
 ```
 
-読みを変えるときは、`add-word.py` に同じ表記で渡す（`curl` なら消して登録し直すか、
+読みを変えるときは、`add-word` に同じ表記で渡す（`curl` なら消して登録し直すか、
 `PUT /user_dict_word/<ID>`）。
 
 ### リポジトリに残す
@@ -204,7 +209,7 @@ curl -s -X POST -H 'Content-Type: application/json' \
 
 ### 記号と数字
 
-辞書で直せないものは、`hooks/speak-response.py` の `to_speech` で置き換えている。
+辞書で直せないものは、`src/claudecodespeak/hook.py` の `to_speech` で置き換えている。
 
 - 「〜」「～」「→」は「から」にする。前後のスペースも消す（`1 〜 4` → `1から4`）
 - 半角の「~」は、数字に挟まれたときだけ「から」にする（`1~4` → `1から4`）

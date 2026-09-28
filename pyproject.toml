@@ -1,0 +1,21 @@
+[project]
+name = "claudecodespeak"
+description = "Claude Code の返答の冒頭を、手元の VOICEVOX で読み上げるフック"
+readme = "README.md"
+requires-python = ">=3.13"
+authors = [{ name = "Yoichi Tanibayashi", email = "yoichi@tanibayashi.jp" }]
+dependencies = [
+  "click>=8.3.1",
+  "loguru>=0.7.3",
+]
+dynamic = ["version"]
+
+[project.scripts]
+claudecodespeak = "claudecodespeak.cli:cli"
+
+[build-system]
+requires = ["hatch-vcs", "hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.version]
+source = "vcs"
