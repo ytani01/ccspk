@@ -105,6 +105,9 @@ def to_speech(text):
     # エンジンが読まない記号。「~」は範囲にも使うので下で扱う。`TODO-013` の件 のように
     # 囲まれた番号の後ろのスペースを TODO の置き換えで消せるよう、ここで消す
     text = re.sub(r"[`*>]", "", text)
+    # 「決着させた ( 6e985ac ) ので」のコミット ID は、前後のスペースごと消す。
+    # 取り違えないよう、この形のときだけ
+    text = re.sub(r"[ \t]+\([ \t]+[0-9a-f]{7}[ \t]+\)[ \t]+", "", text)
     # TODO-027 は「トゥードゥー ゼロニーナナ」と桁ごとに読む。「-」を残すと間が入り、消すと
     # TODO-100 が「ヒャク」になるのでカナにする。TODO-020〜022 の後ろの番号も同じ。
     # 直後のスペースは、下の数字と同じく日本語が続くときだけ消す
@@ -336,6 +339,14 @@ def demo():
     assert to_speech("3 files と 1 ファイル、v1 A") == "3 files と 1ファイル、v1 A"
     assert to_speech("x 1  字、**2** 行、１８０ 字") == "x 1字、2行、１８０字"
     assert to_speech("手順 1\n次へ") == "手順 1 次へ"  # 行をまたぐときはつなげない
+    # コミット ID は「 ( 16 進 7 桁 ) 」の形だけ消す
+    assert to_speech("決着させた ( 6e985ac ) ので、foo ( `1234567` ) bar、x ( abcdefa ) y") == (
+        "決着させたので、foobar、xy")
+    assert to_speech("a (6e985ac ) b、a ( 6e985ac) b、a( 6e985ac ) b、a ( 6e985ac )b") == (
+        "a (6e985ac ) b、a ( 6e985ac) b、a( 6e985ac ) b、a ( 6e985ac )b")  # スペースが欠ける
+    assert to_speech("a ( 6E985AC ) b、a ( 6e985a ) b、a ( 6e985acd ) b、a （ 6e985ac ） b") == (
+        "a ( 6E985AC ) b、a ( 6e985a ) b、a ( 6e985acd ) b、a （ 6e985ac ） b")  # 大文字・桁数・全角
+    assert to_speech("a\n( 6e985ac ) b、a ( 6e985ac\n) b") == "a ( 6e985ac ) b、a ( 6e985ac ) b"  # 改行はスペースに数えない
     assert sentences("直した。確かめる？ はい! 終わり") == ["直した。", "確かめる？", "はい!", "終わり"]
     assert sentences("句点なし") == ["句点なし"]
     assert sentences("") == []
