@@ -27,14 +27,16 @@ VOICEVOX のエンジン（`127.0.0.1:50021`）、`pw-play`。読み上げの範
   下がる。最初の音までは、エンジンが空いていれば 1.2〜2.5 秒ほど
 - 返答の最後の文章に加えて、ツールを呼ぶ前などの途中の文章も読む（`MessageDisplay`）。
   ただし `MessageDisplay` が起動しない文章があり、それは読まない。起動する条件は分かっていない
+- `AskUserQuestion` で質問してくるときは、質問の文を読む（`PreToolUse`）。質問が複数あれば
+  全部つないで読み、選択肢は読まない
 - 再生中に次の文章が来たら、前の再生を止めて新しいほうを読む。途中の文章が続けて来ると、
   前の文章は冒頭で切れる
 - 読んでから 5 秒のうちに同じ文章が来たら読まない。返答の最後の文章は `MessageDisplay` と
   `Stop` の両方から（実測では 0.01 秒差で）来るので、2 度読まないため
-- 表だけ・URL だけのように、整えると空になる途中の文章では、前の再生を止めない。
+- 表だけ・URL だけのように、整えると空になる途中の文章や質問では、前の再生を止めない。
   `Stop` が空のときは、今までどおり止める
-- サブエージェントの報告では鳴らない（`SubagentStop` は登録せず、`MessageDisplay` も
-  `agent_id` があれば読まない）
+- サブエージェントの報告や質問では鳴らない（`SubagentStop` は登録せず、`MessageDisplay` と
+  `PreToolUse` も `agent_id` があれば読まない）
 - `pw-play` が無い、エンジンに接続できない、PipeWire が動いていない、のどれかなら
   鳴らさずに終わり、使えないことを覚えて、次からは確かめもせずに終わる。
   戻し方は [UsersGuide.md](UsersGuide.md#使えないと覚えたとき) にある
@@ -44,11 +46,13 @@ VOICEVOX のエンジン（`127.0.0.1:50021`）、`pw-play`。読み上げの範
 ### 流れ
 
 Claude Code は、返答を終えるたびに Stop フックとして、文章を表示するたびに
-MessageDisplay フックとして `claudecodespeak hook` を起動し、標準入力に JSON を渡す。
+MessageDisplay フックとして、`AskUserQuestion` を呼ぶ直前に PreToolUse フックとして
+`claudecodespeak hook` を起動し、標準入力に JSON を渡す。
 使うのは、Stop なら `last_assistant_message`（最後の返答の本文）、MessageDisplay なら
 `message_id`・`index`・`delta`・`final`。MessageDisplay は 1 つの文章を `index` ごとの分
 （`delta`）に分けて渡し、最後の分に `final: true` が付く。フックは並んで走り、後ろの分が
-先に届くこともある。`agent_id` があるとき（サブエージェント）は読まない。
+先に届くこともある。PreToolUse なら `tool_name` と `tool_input.questions[].question`。
+`agent_id` があるとき（サブエージェント）は読まない。
 
 `hook.py` の `main()`（`claudecodespeak hook`）は引数で 3 つに分かれる。
 
@@ -63,11 +67,13 @@ MessageDisplay フックとして `claudecodespeak hook` を起動し、標準�
 1. 環境変数 `CLAUDE_TTS_SPEAK` が `1` か
 2. 使えないと覚えたファイル（`UNUSABLE`）が無いか。あれば確かめもせずに終わる
 3. `unusable()` で鳴らせるかを確かめる。だめなら理由を `UNUSABLE` に書いて終わる
-4. 標準入力の JSON を読む。MessageDisplay で `agent_id` があれば終わる
+4. 標準入力の JSON を読む。MessageDisplay・PreToolUse で `agent_id` があれば終わる
 5. `LOCK` を取る。ここから先は、同時に来たフックを 1 つずつ通す
 6. MessageDisplay なら、`assemble()` で分を `PARTS` に置く。最後の分とそれより前の分が
    そろっていなければ終わる。そろったらつなぎ、置いた分を消す。`PARTS_KEEP` 秒より古い分もここで消す
-7. `to_speech()` で読み上げる文に整える。MessageDisplay で空になったら終わる
+   PreToolUse なら、`questions()` で質問の文を改行でつなぐ。`tool_name` が
+   `AskUserQuestion` でなければ空にする
+7. `to_speech()` で読み上げる文に整える。MessageDisplay・PreToolUse で空になったら終わる
 8. 整えた文が `LAST`（最後に読んだ文）と同じで、書いてから `SAME_WITHIN` 秒のうちなら終わる
 9. `stop_playing()` で前の再生を止める
 10. 文が空でなければ、`LAST` に書き、`speak()` で子プロセスを起こし、その PID を `PIDFILE` に書く
@@ -167,6 +173,7 @@ uv run claudecodespeak add-word --test   # アクセントの位置の決め方�
 ```
 
 MessageDisplay の分をつなぐ `assemble()` も、一時ディレクトリで確かめている。
+PreToolUse の質問の文を取り出す `questions()` も確かめている。
 整形や分割を変えたら、`demo()` に例を足す。`unusable()` と `main()` の分岐は
 環境に依るので、`demo()` では確かめていない。下の手順で手で確かめる。
 
@@ -193,7 +200,8 @@ rm -r $tmp
 使えると判定して子プロセスを起こせば、`$tmp/claude-tts.pid`・`$tmp/claude-tts.last`・
 `$tmp/claude-tts.lock` ができる。MessageDisplay として試すなら、
 `{"hook_event_name":"MessageDisplay","message_id":"m1","index":0,"final":true,"delta":"…"}` を渡す
-（`$tmp/claude-tts.parts/` もできる）。5 秒のうちに同じ文を渡すと、`claude-tts.pid` の PID は
+（`$tmp/claude-tts.parts/` もできる）。PreToolUse として試すなら、
+`{"hook_event_name":"PreToolUse","tool_name":"AskUserQuestion","tool_input":{"questions":[{"question":"…"}]}}` を渡す。5 秒のうちに同じ文を渡すと、`claude-tts.pid` の PID は
 変わらない（2 度読まない）。JSON に `\n` を入れるときは、zsh の `echo` は改行に変えてしまうので
 `printf '%s'` で渡す。
 使えないと判定したときは、`$tmp/claude-tts.unusable` ができ、中身が理由になる。

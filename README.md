@@ -7,7 +7,7 @@ Claude Code の返答の冒頭を、手元の VOICEVOX で読み上げるフッ�
 | ファイル | 中身 |
 |---|---|
 | `pyproject.toml` | コマンド `claudecodespeak` の定義（`uv tool install` で入れる） |
-| `src/claudecodespeak/hook.py` | `claudecodespeak hook`。Stop・MessageDisplay フック。返答の冒頭を VOICEVOX で読み上げる |
+| `src/claudecodespeak/hook.py` | `claudecodespeak hook`。Stop・MessageDisplay・PreToolUse フック。返答の冒頭と質問の文を VOICEVOX で読み上げる |
 | `src/claudecodespeak/add_word.py` | `claudecodespeak add-word`。VOICEVOX のユーザー辞書に語を足す |
 | `src/claudecodespeak/cli.py` | サブコマンドをまとめる |
 | `systemd/voicevox-engine.service` | VOICEVOX のエンジンを常駐させる user unit |
@@ -18,7 +18,8 @@ Claude Code の返答の冒頭を、手元の VOICEVOX で読み上げるフッ�
 ## 動き方
 
 `Stop` と `MessageDisplay` のフックで `claudecodespeak hook` が動き、Claude の返答の冒頭を
-VOICEVOX（夜語トバリ・明るい）で読み上げる。合成は手元のエンジンで行うので、
+VOICEVOX（夜語トバリ・明るい）で読み上げる。`AskUserQuestion` で質問してくるときは、
+`PreToolUse` のフックで質問の文を読む。合成は手元のエンジンで行うので、
 返答が外に送られることはない。
 
 - 環境変数 `CLAUDE_TTS_SPEAK` が `1` のときだけ鳴る

@@ -45,10 +45,11 @@ claudecodespeak hook --test
 
 ### Claude Code のフック
 
-`~/.claude/settings.json` の `hooks` に Stop フックと MessageDisplay フックを足し、
+`~/.claude/settings.json` の `hooks` に Stop・MessageDisplay・PreToolUse のフックを足し、
 `env` で `CLAUDE_TTS_SPEAK` を `1` にする。`claudecodespeak` を入れていないマシンでは何もしない。
 Stop は返答の最後の文章を、MessageDisplay はツールを呼ぶ前などの途中の文章を読む。
-途中の文章が要らなければ、MessageDisplay は足さない。
+PreToolUse（matcher `AskUserQuestion`）は、Claude が質問してくるときに質問の文を読む
+（選択肢は読まない）。途中の文章や質問が要らなければ、そのフックは足さない。
 `claudecodespeak` は `PATH` から探すので、入れたのに鳴らないときは、Claude Code を
 起動するシェルで `command -v claudecodespeak` が見つかるかを確かめる。
 
@@ -70,6 +71,18 @@ Stop は返答の最後の文章を、MessageDisplay はツールを呼ぶ前な
   ],
   "MessageDisplay": [
     {
+      "hooks": [
+        {
+          "type": "command",
+          "command": "! command -v claudecodespeak >/dev/null || claudecodespeak hook",
+          "timeout": 5
+        }
+      ]
+    }
+  ],
+  "PreToolUse": [
+    {
+      "matcher": "AskUserQuestion",
       "hooks": [
         {
           "type": "command",

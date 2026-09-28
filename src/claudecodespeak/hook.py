@@ -1,6 +1,7 @@
-"""Stop / MessageDisplay hook: Claude の返答を VOICEVOX で読み上げる。
+"""Stop / MessageDisplay / PreToolUse hook: Claude の返答を VOICEVOX で読み上げる。
 
-Stop では最後の返答を、MessageDisplay ではツールを呼ぶ前などの途中の文章を読む。
+Stop では最後の返答を、MessageDisplay ではツールを呼ぶ前などの途中の文章を、
+PreToolUse（AskUserQuestion）では質問の文を読む。
 環境変数 CLAUDE_TTS_SPEAK が 1 のときだけ鳴らす。
 再生中に次の返答が来たら、前の再生を止めてから読む。
 pw-play が無い、エンジンに接続できない、PipeWire が動いていない、のどれかなら
@@ -109,6 +110,17 @@ def to_speech(text):
     text = re.sub(r"(?<=[0-9０-９])[ \t]+(?=[\u3041-\u30ff\u4e00-\u9fff])", "", text)
     text = re.sub(r"\s+", " ", text).strip()
     return clip(text)
+
+
+def questions(payload):
+    """PreToolUse で AskUserQuestion の質問の文を改行でつなぐ。選択肢は読まない。"""
+    if payload.get("tool_name") != "AskUserQuestion":
+        return ""
+    tool_input = payload.get("tool_input")
+    items = tool_input.get("questions") if isinstance(tool_input, dict) else None
+    if not isinstance(items, list):
+        return ""
+    return "\n".join(q["question"] for q in items if isinstance(q, dict) and isinstance(q.get("question"), str))
 
 
 def clip(text):
@@ -336,6 +348,16 @@ def demo():
         "見直しが終わったので、", "確かめてください。", "二つ目の文ですが、ここは切らない。"]
     assert chunks("") == []
 
+    # 質問の文だけをつなぐ。AskUserQuestion のほかは読まない
+    ask = {"tool_name": "AskUserQuestion", "tool_input": {"questions": [
+        {"question": "どちらにしますか？", "options": [{"label": "A案"}]},
+        {"question": "範囲は？"}]}}
+    assert to_speech(questions(ask)) == "どちらにしますか？ 範囲は？"
+    assert questions({**ask, "tool_name": "Bash"}) == ""
+    assert questions({"tool_name": "AskUserQuestion"}) == ""
+    assert questions({"tool_name": "AskUserQuestion", "tool_input": "壊れた入力"}) == ""
+    assert questions({"tool_name": "AskUserQuestion", "tool_input": {"questions": [{"question": 1}]}}) == ""
+
     # MessageDisplay の分をつなぐ。後ろの分が先に来ても、そろうまでは None
     global PARTS
     saved, PARTS = PARTS, Path(tempfile.mkdtemp(), "parts")
@@ -364,7 +386,7 @@ def demo():
 @click.option("--test", is_flag=True, help="置き換えと切り方の自己チェックを走らせる")
 @click.option(PLAY, "play_text", metavar="TEXT", help="合成と再生だけを試す（子プロセスと同じ動き）")
 def main(test, play_text):
-    """Stop・MessageDisplay フック。標準入力のフックの入力を読み、返答の冒頭を読み上げる。"""
+    """Stop・MessageDisplay・PreToolUse フック。標準入力のフックの入力を読み、返答の冒頭を読み上げる。"""
     if test:
         demo()
         return
@@ -383,9 +405,11 @@ def main(test, play_text):
         payload = json.load(sys.stdin)
     except (json.JSONDecodeError, OSError):
         return
-    display = payload.get("hook_event_name") == "MessageDisplay"
-    _log.debug(f"event={payload.get('hook_event_name')}")
-    if display and payload.get("agent_id"):
+    event = payload.get("hook_event_name")
+    display = event == "MessageDisplay"
+    ask = event == "PreToolUse"
+    _log.debug(f"event={event}")
+    if (display or ask) and payload.get("agent_id"):
         return
     try:
         lock = open(LOCK, "w")
@@ -400,10 +424,12 @@ def main(test, play_text):
                 return
             if raw is None:
                 return
+        elif ask:
+            raw = questions(payload)
         else:
             raw = payload.get("last_assistant_message") or ""
         text = to_speech(raw)
-        if display and not text:
+        if (display or ask) and not text:
             return  # 表だけの途中の文章などで、読んでいる返答を止めない
         try:
             if text and LAST.read_text() == text and time.time() - LAST.stat().st_mtime < SAME_WITHIN:
