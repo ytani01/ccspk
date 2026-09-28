@@ -1,12 +1,15 @@
-"""claudecodespeak のエントリポイント。サブコマンド hook と add-word をまとめる。"""
+"""claudecodespeak のエントリポイント。サブコマンド hook・say・status・test・dict をまとめる。"""
 
 import click
 
 from . import __version__
-from .add_word import main as add_word
 from .click_utils import click_common_opts
+from .hook import demo as hook_demo
 from .hook import main as hook
+from .hook import say, status
 from .mylog import getLogger, loggerInit
+from .user_dict import demo as dict_demo
+from .user_dict import dict_group
 
 _log = getLogger("main")
 
@@ -19,8 +22,17 @@ def cli(ctx, debug):
     _log.debug(f"debug={debug}")
 
 
+@cli.command("test")
+def test():
+    """hook と dict の自己テストを走らせる。"""
+    hook_demo()
+    dict_demo()
+
+
 cli.add_command(hook, name="hook")
-cli.add_command(add_word, name="add-word")
+cli.add_command(say, name="say")
+cli.add_command(status, name="status")
+cli.add_command(dict_group, name="dict")
 
 
 if __name__ == "__main__":

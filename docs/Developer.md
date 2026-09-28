@@ -1,8 +1,8 @@
 # 開発者向け
 
 コードは `src/claudecodespeak/` にあり、コマンド `claudecodespeak` のサブコマンドに分かれる
-（`cli.py` がまとめる）。フックは `hook.py`（`claudecodespeak hook`）、辞書に語を足すのは
-`add_word.py`（`claudecodespeak add-word`）。依存は click、loguru、
+（`cli.py` がまとめる）。フックは `hook.py`（`claudecodespeak hook`・`say`・`status`）、
+辞書を操作するのは `user_dict.py`（`claudecodespeak dict`）。依存は click、loguru、
 VOICEVOX のエンジン（`127.0.0.1:50021`）、`pw-play`。読み上げの範囲や切り方など、
 利用者から見た動きは下の「動き方」、インストールと辞書は
 [UsersGuide](UsersGuide.md) にある。
@@ -54,15 +54,16 @@ MessageDisplay フックとして、`AskUserQuestion` を呼ぶ直前に PreTool
 先に届くこともある。PreToolUse なら `tool_name` と `tool_input.questions[].question`。
 `agent_id` があるとき（サブエージェント）は読まない。
 
-`hook.py` の `main()`（`claudecodespeak hook`）は引数で 3 つに分かれる。
+`hook.py` にはサブコマンドが 3 つある。
 
-| 起動のされ方 | 動き |
+| サブコマンド | 動き |
 |---|---|
-| `--test` | `demo()` の自己テストを走らせる |
-| `--play <本文>` | 合成と再生だけをする（`play()`）。子プロセスと同じ動き |
-| 引数なし | フックとして動く（下の順） |
+| `hook` | フックとして動く（下の順） |
+| `say <本文>` | 合成と再生だけをする（`play()`）。子プロセスと同じ動き |
+| `status [--clear]` | `UNUSABLE` があれば理由を表示する。`--clear` なら消す |
 
-フックとしては、次の順に進む。どこかで条件を満たさなければ、そこで終わる。
+`hook.py` の `main()`（`claudecodespeak hook`）は、フックとして次の順に進む。
+どこかで条件を満たさなければ、そこで終わる。
 
 1. 環境変数 `CLAUDE_TTS_SPEAK` が `1` か
 2. 使えないと覚えたファイル（`UNUSABLE`）が無いか。あれば確かめもせずに終わる
@@ -163,7 +164,7 @@ MessageDisplay フックとして、`AskUserQuestion` を呼ぶ直前に PreTool
 | `PARTS_KEEP` | 600 | そろわないまま残った MessageDisplay の分は、この秒数で消す |
 | `SAME_WITHIN` | 5 | 読んでからこの秒数のうちに同じ文が来たら読まない。長くすると、続けて同じ返答（「はい。」など）が来たときに黙ってしまう |
 
-`ENGINE` と `SPEAKER` は `add_word.py` にもあり、`hook.py` と揃える。
+`ENGINE` と `SPEAKER` は `user_dict.py` にもあり、`hook.py` と揃える。
 
 ## テストと動作の確かめ方
 
@@ -174,8 +175,7 @@ MessageDisplay フックとして、`AskUserQuestion` を呼ぶ直前に PreTool
 個別に走らせる手段は無い。lint の設定は無い。
 
 ```sh
-uv run claudecodespeak hook --test
-uv run claudecodespeak add-word --test   # アクセントの位置の決め方（accent_of）
+uv run claudecodespeak test   # hook の demo() と dict のアクセントの位置の決め方（accent_of）を両方
 ```
 
 MessageDisplay の分をつなぐ `assemble()` も、一時ディレクトリで確かめている。
@@ -219,7 +219,7 @@ rm -r $tmp
 tmp=$(mktemp -d)
 echo '{"last_assistant_message":"確認です。"}' \
   | CLAUDE_TTS_SPEAK=1 XDG_RUNTIME_DIR=$tmp PATH=/nonexistent .venv/bin/claudecodespeak hook
-cat $tmp/claude-tts.unusable   # pw-play が無い
+XDG_RUNTIME_DIR=$tmp .venv/bin/claudecodespeak status   # pw-play が無い
 rm -r $tmp
 ```
 
@@ -227,7 +227,7 @@ rm -r $tmp
 子プロセスを直接起動して、合成と再生だけを試す（整形は通らない）。
 
 ```sh
-.venv/bin/claudecodespeak hook --play '合成と再生だけを試す。'
+.venv/bin/claudecodespeak say '合成と再生だけを試す。'
 ```
 
 ### 最初の音までの時間

@@ -383,16 +383,8 @@ def demo():
 
 
 @click.command()
-@click.option("--test", is_flag=True, help="置き換えと切り方の自己チェックを走らせる")
-@click.option(PLAY, "play_text", metavar="TEXT", help="合成と再生だけを試す（子プロセスと同じ動き）")
-def main(test, play_text):
+def main():
     """Stop・MessageDisplay・PreToolUse フック。標準入力のフックの入力を読み、返答の冒頭を読み上げる。"""
-    if test:
-        demo()
-        return
-    if play_text is not None:
-        play(play_text)
-        return
     if os.environ.get("CLAUDE_TTS_SPEAK") != "1" or UNUSABLE.exists():
         return
     if reason := unusable():
@@ -446,6 +438,26 @@ def main(test, play_text):
     finally:
         if lock:
             lock.close()
+
+
+@click.command()
+@click.argument("text")
+def say(text):
+    """合成と再生だけを試す（子プロセスと同じ動き）。"""
+    play(text)
+
+
+@click.command()
+@click.option("--clear", is_flag=True, help="UNUSABLE を消す")
+def status(clear):
+    """鳴らせないと覚えている理由（UNUSABLE）を表示する。無ければ「止まっていない」と表示する。"""
+    if UNUSABLE.exists():
+        print(f"{UNUSABLE}: {UNUSABLE.read_text().rstrip()}")
+        if clear:
+            UNUSABLE.unlink()
+            print("消した")
+    else:
+        print("止まっていない")
 
 
 if __name__ == "__main__":

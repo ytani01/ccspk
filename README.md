@@ -8,7 +8,7 @@ Claude Code の返答の冒頭を、手元の VOICEVOX で読み上げるフッ�
 |---|---|
 | `pyproject.toml` | コマンド `claudecodespeak` の定義（`uv tool install` で入れる） |
 | `src/claudecodespeak/hook.py` | `claudecodespeak hook`。Stop・MessageDisplay・PreToolUse フック。返答の冒頭と質問の文を VOICEVOX で読み上げる |
-| `src/claudecodespeak/add_word.py` | `claudecodespeak add-word`。VOICEVOX のユーザー辞書に語を足す |
+| `src/claudecodespeak/user_dict.py` | `claudecodespeak dict`。VOICEVOX のユーザー辞書を操作する |
 | `src/claudecodespeak/cli.py` | サブコマンドをまとめる |
 | `systemd/voicevox-engine.service` | VOICEVOX のエンジンを常駐させる user unit |
 | `voicevox/user_dict.json` | VOICEVOX のユーザー辞書を書き出したもの（読み間違える語の読み） |

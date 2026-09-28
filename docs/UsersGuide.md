@@ -40,7 +40,7 @@ unit ファイルのパスを揃えて書き換え、`systemctl --user daemon-re
 整形が正しく動くかは、次の自己テストで確認できる。
 
 ```sh
-claudecodespeak hook --test
+claudecodespeak test
 ```
 
 ### Claude Code の設定
@@ -111,10 +111,10 @@ PreToolUse（matcher `AskUserQuestion`）は、Claude が質問してくると�
 - `$XDG_RUNTIME_DIR/claude-tts.unusable`
 - `$XDG_RUNTIME_DIR` が無い環境では `/tmp/claude-tts-<uid>.unusable`
 
-理由はファイルの中身で分かる。
+理由は `status` で分かる。
 
 ```sh
-cat "$XDG_RUNTIME_DIR/claude-tts.unusable"
+claudecodespeak status
 ```
 
 `$XDG_RUNTIME_DIR` のファイルは、その利用者のセッションが全部終わると消える
@@ -126,85 +126,65 @@ cat "$XDG_RUNTIME_DIR/claude-tts.unusable"
 フックがまた確認する。
 
 ```sh
-rm "$XDG_RUNTIME_DIR/claude-tts.unusable"
+claudecodespeak status --clear
 ```
 
 ## 読み上げの辞書
 
 返答の読み上げ（`claudecodespeak hook`）で読み間違える語は、VOICEVOX の
 エンジンのユーザー辞書で読みを直す。辞書はエンジンの中にあり、書き出したものを
-`voicevox/user_dict.json` としてリポジトリに置いている。
-
-GUI の VOICEVOX エディタは使わないので、登録はエンジンの API で行う。
-ブラウザから操作するなら `http://127.0.0.1:50021/docs`、コマンドなら `curl`。
+`voicevox/user_dict.json` としてリポジトリに置いている。登録・一覧・削除・
+書き出し・読み込みは、どれも `claudecodespeak dict` のサブコマンドで行う
+（`dict export` と `dict import` の例は、リポジトリの直下で走らせる）。
 
 ### 読みを確認する
 
 登録する前後に、エンジンがどう読むかを確認する。
 
 ```sh
-curl -s -X POST -G http://127.0.0.1:50021/audio_query \
-  --data-urlencode speaker=119 --data-urlencode 'text=TODO.md を直す' | jq -r .kana
+claudecodespeak dict kana 'TODO.md を直す'
 ```
 
 `'` の直前の音の後で、音が下がる。
 
 ### 単語を登録する
 
-`claudecodespeak add-word` に表記と読みを渡す。アクセントの位置はエンジンに任せ、
+`claudecodespeak dict add` に表記と読みを渡す。アクセントの位置はエンジンに任せ、
 登録後の読みを表示する。同じ表記が登録済みなら、読みを書き換える（品詞と優先度は
 今のまま）。
 
 ```sh
-claudecodespeak add-word README リードミー --speak
+claudecodespeak dict add README リードミー --speak
 ```
 
 - `--speak` を付けると、登録後に表記を読み上げる
-- 表示した読みのアクセントが違えば、`--accent` で位置を指定して登録し直す
+- 表示した読みのアクセントが違えば、`--accent` で位置を指定して登録し直す。
+  `accent_type` は、音が下がる直前の音が頭から何番目か。1 なら最初の音の後で
+  下がる（頭高）、0 なら下がらない（平板）
 - エンジンは、1 語だけでは平板と尾高（最後の音の後で下がる）を見分けない。
-  そのため `add-word` は、句が 1 つで最後の音で下がるときは平板（`0`）として
+  そのため `dict add` は、句が 1 つで最後の音で下がるときは平板（`0`）として
   登録する。尾高の語は `--accent <音の数>` で登録し直す
 - 品詞は `--type`。省くと、新しい語は `PROPER_NOUN`、登録済みの語は今の品詞のまま
-- `voicevox/user_dict.json` への書き戻しはしない（下の「辞書をリポジトリに保存する」）
-
-`curl` で登録するなら次のとおり。
-
-```sh
-curl -s -X POST -G http://127.0.0.1:50021/user_dict_word \
-  --data-urlencode surface=README \
-  --data-urlencode pronunciation=リードミー \
-  --data-urlencode accent_type=1 \
-  --data-urlencode word_type=PROPER_NOUN
-```
-
-- `pronunciation` はカタカナ。`--data-urlencode` を使わないと、日本語が
-  そのまま URL に入って `Invalid HTTP request received.` で失敗する
-- `accent_type` は、音が下がる直前の音が頭から何番目か。1 なら最初の音の後で
-  下がる（頭高）、0 なら下がらない（平板）
 - 英字は大文字と小文字を別の語として扱う。両方直すなら両方登録する
   （`JSON` と `json`）
-- 返ってくる文字列（UUID）が、その語の ID
-
-ブラウザでは、`/docs` の `POST /user_dict_word` を開き、「Try it out」で
-同じ値を入れて「Execute」。
+- `voicevox/user_dict.json` への書き戻しはしない（下の「辞書をリポジトリに保存する」）
 
 ### 登録した単語を一覧・削除する
 
 ```sh
-curl -s http://127.0.0.1:50021/user_dict \
-  | jq -r 'to_entries[] | "\(.key)  \(.value.surface)  \(.value.pronunciation)"'
-curl -s -X DELETE http://127.0.0.1:50021/user_dict_word/<ID>
+claudecodespeak dict list
+claudecodespeak dict remove README
 ```
 
-読みを変えるときは、`add-word` に同じ表記で渡す（`curl` なら消して登録し直すか、
-`PUT /user_dict_word/<ID>`）。
+`dict list` は ID・表記・読み・`accent_type` を表記順に並べる。読みを変えるときは、
+`dict add` に同じ表記で渡す。
 
 ### 辞書をリポジトリに保存する
 
 登録や削除をしたら、辞書のファイルを書き出してコミットする。
 
 ```sh
-curl -s http://127.0.0.1:50021/user_dict | jq -S . > ~/work/claudecodespeak/voicevox/user_dict.json
+claudecodespeak dict export voicevox/user_dict.json
 ```
 
 ### リポジトリの辞書を読み込む
@@ -212,13 +192,10 @@ curl -s http://127.0.0.1:50021/user_dict | jq -S . > ~/work/claudecodespeak/voic
 エンジンを再インストールしたときや、別のマシンでは、辞書のファイルを読み込む。
 
 ```sh
-curl -s -X POST -H 'Content-Type: application/json' \
-  -d @$HOME/work/claudecodespeak/voicevox/user_dict.json \
-  'http://127.0.0.1:50021/import_user_dict?override=true'
+claudecodespeak dict import voicevox/user_dict.json
 ```
 
-`override=true` は、同じ ID の語があれば上書きする。辞書にあってファイルに
-無い語は消えずに残る。
+同じ ID の語があれば上書きする。辞書にあってファイルに無い語は消えずに残る。
 
 ### 記号と数字
 
