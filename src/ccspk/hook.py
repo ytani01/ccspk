@@ -221,7 +221,16 @@ def chunks(text):
     """合成する単位。1・2 文目は split_first で切り、3 文目以降は文ごと。
     2 文目も切るのは、1 文目を鳴らしている間に長い 2 文目の合成が終わらず、継ぎ目で待つのを減らすため。"""
     ss = sentences(text)
-    return [c for s in ss[:2] for c in split_first(s)] + ss[2:]
+    return [squeeze(c) for c in [c for s in ss[:2] for c in split_first(s)] + ss[2:]]
+
+
+def squeeze(chunk):
+    """英単語と日本語の間のスペースを詰める。スペースの前後に間が入る（reviewer の → レビュウタ'ントウ、ノ'）。
+    英単語同士（Claude Code）と数字の前後（行をまたいだ「手順 1 次へ」）は残す。
+    split_first がスペースで切るので、to_speech ではなく切った後の塊ごとに詰める。"""
+    return re.sub(
+        r"(?<=[A-Za-z])[ ]+(?=[ぁ-ヿ一-鿿])|(?<=[ぁ-ヿ一-鿿])[ ]+(?=[A-Za-z])", "", chunk
+    )
 
 
 def synthesize(sentence):
@@ -370,6 +379,13 @@ def demo():
     assert chunks("見直しが終わったので、確かめてください。二つ目の文ですが、ここも切る。三つ目の文ですが、ここは切らない。") == [
         "見直しが終わったので、", "確かめてください。", "二つ目の文ですが、", "ここも切る。", "三つ目の文ですが、ここは切らない。"]
     assert chunks("") == []
+    # 英単語と日本語の間のスペースは、切った後に詰める。英単語同士と数字の前後は残す
+    assert chunks("reviewer の指摘を受けて挙動が変わったので、同じ reviewer に見てもらう。") == [
+        "reviewerの指摘を受けて挙動が変わったので、", "同じreviewerに見てもらう。"]
+    assert chunks("settings.json の登録は通りました。") == ["settings.json", "の登録は通りました。"]
+    assert chunks("一。二。Claude Code の 3 files を見る。") == ["一。", "二。", "Claude Codeの 3 filesを見る。"]
+    assert chunks(to_speech("手順 1\n次へ")) == ["手順 1 次へ"]
+    assert squeeze("ア  a") == "アa"  # 続くスペースもまとめて詰める
 
     # 質問の文だけをつなぐ。AskUserQuestion のほかは読まない
     ask = {"tool_name": "AskUserQuestion", "tool_input": {"questions": [
