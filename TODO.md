@@ -59,73 +59,34 @@ TODO-022 の改名を先にやる（パスが `~/.config/ccspk/` になるため
   対象は `rg -n -i -e claudecodespeak -e claude-tts --hidden -g '!.git' -g '!archives'`
 - [ ] `~/.claude/settings.json` のフックのコマンド（2 か所）を `ccspk hook` にし、
   `uv tool install .` と `uv tool uninstall claudecodespeak` で入れ替える（Claude がやる）
-- [ ] リポジトリの外の残り（下の「利用者がやること」）は、コミットのあと利用者がやる
+- [ ] GitHub のリポジトリを改名し、remote を向け直す（Claude がやる。push はしない）
+  - `gh repo rename ccspk -R ytani01/claudecodespeak --yes`
+  - `git remote set-url origin git@github.com:ytani01/ccspk.git`
+- [ ] 手元のディレクトリを移すスクリプト `archives/agents/TODO-022/move-dir.sh` を作る。
+  Claude Code の作業ディレクトリそのものを移すので、ここだけは Claude Code を終了してから
+  利用者が走らせる。スクリプトがやること:
+  - 先に確かめて、どれか外れたら何もせず止まる: `~/work/claudecodespeak` がある、
+    `~/work/ccspk` と `~/.claude/projects/-home-ytani-work-ccspk` が無い
+  - `~/work/claudecodespeak` → `~/work/ccspk`、
+    `~/.claude/projects/-home-ytani-work-claudecodespeak` → `-home-ytani-work-ccspk`（メモリの置き場所）
+  - `.venv` を消して `uv sync`（中のスクリプトの 1 行目が旧いパスの python を指すため）
+  - `uv tool install --reinstall .`（`~/.local/share/uv/tools/ccspk/uv-receipt.toml` が旧いディレクトリを指すため）
+  - 旧いパスを指す symlink 2 本
+    （`~/.config/systemd/user/voicevox-engine.service` と `default.target.wants/` の下）を消し、
+    `systemctl --user daemon-reload`・`link ~/work/ccspk/systemd/voicevox-engine.service`・
+    `enable voicevox-engine.service`。エンジンは止めない（unit ファイルの中身は変わらない）
+  - 最後に `command -v ccspk`、`command -v claudecodespeak` が空であること、`ccspk status` を表示する
+- [ ] 利用者に、Claude Code を終了して `~/work/claudecodespeak/archives/agents/TODO-022/move-dir.sh` を
+  走らせ、`~/work/ccspk` で起動し直して読み上げが鳴るか確かめるよう伝える
 
 `archives/` と過去のコミットメッセージの旧名は、記録なので直さない。
 挙動は名前以外変わらないので reviewer は置かない。verifier には、旧名が残っていないこと、
 `ccspk test` が通ること、入れ替えたあとのフックで読み上げが鳴ることを確かめさせる。
+`move-dir.sh` は、`HOME` を一時ディレクトリにし、`uv`・`systemctl` を記録するだけの偽物を
+`PATH` の先頭に置いて走らせ、移した先と呼んだコマンドを確かめさせる（本物の環境では走らせない）。
+前提が外れたときに何も変えずに止まることも 1 通り確かめさせる。
 切り替えの瞬間に鳴っている旧名の読み上げは、新しいフックから止められない（`stop_playing()` は
 `MODULE` で見分ける。一度きりなので対処しない）。
-
-### 利用者がやること
-
-Claude の作業（上の 4 つ）のコミットが済んでから、この順にやる。**1 の前に Claude Code を
-終了する**（作業ディレクトリが消えるため）。
-
-1. GitHub のリポジトリを改名し、remote を向け直す
-
-   ```sh
-   cd ~/work/claudecodespeak
-   gh repo rename ccspk -R ytani01/claudecodespeak
-   git remote set-url origin git@github.com:ytani01/ccspk.git
-   git remote -v   # ytani01/ccspk.git になっていること
-   ```
-
-2. 手元のディレクトリと、Claude Code のプロジェクトのディレクトリ（メモリの置き場所）を改名する
-
-   ```sh
-   \mv ~/work/claudecodespeak ~/work/ccspk
-   \mv ~/.claude/projects/-home-ytani-work-claudecodespeak ~/.claude/projects/-home-ytani-work-ccspk
-   ```
-
-3. `.venv` を作り直す（中のスクリプトの 1 行目が `/home/ytani/work/claudecodespeak/.venv/bin/python`
-   を指しているため）
-
-   ```sh
-   cd ~/work/ccspk
-   \rm -rf .venv && uv sync
-   ```
-
-4. `uv tool` を入れ直す（`~/.local/share/uv/tools/ccspk/uv-receipt.toml` が旧いディレクトリを
-   指したままになるため）
-
-   ```sh
-   uv tool install --reinstall .
-   ```
-
-5. systemd の unit を張り直す。今は次の 2 つが旧いパスを指している
-   - `~/.config/systemd/user/voicevox-engine.service`
-   - `~/.config/systemd/user/default.target.wants/voicevox-engine.service`
-
-   ```sh
-   \rm ~/.config/systemd/user/voicevox-engine.service ~/.config/systemd/user/default.target.wants/voicevox-engine.service
-   systemctl --user daemon-reload
-   systemctl --user link ~/work/ccspk/systemd/voicevox-engine.service
-   systemctl --user enable voicevox-engine.service
-   systemctl --user status voicevox-engine.service   # active (running) のまま
-   ```
-
-   エンジンは動いたままでよい（unit ファイルの中身は変わらない）。
-
-6. 確かめる
-
-   ```sh
-   command -v ccspk            # ~/.local/bin/ccspk
-   command -v claudecodespeak  # 何も出ない
-   ccspk status
-   ```
-
-   Claude Code を `~/work/ccspk` で起動し直し、返答が読み上げられること。
 
 ---
 
