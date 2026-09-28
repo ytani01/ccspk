@@ -13,7 +13,7 @@
     "priority": 5,
     "pronunciation": "ジッソウタントウ",
     "stem": "*",
-    "surface": "ｉｍｐｌｅｍｅｎｔｅｒ",
+    "surface": "implementer",
     "yomi": "ジッソウタントウ"
   },
   "113b1207-3185-4dc1-bc05-b4b7ec7786dc": {
@@ -30,7 +30,7 @@
     "priority": 5,
     "pronunciation": "レビュータントウ",
     "stem": "*",
-    "surface": "ｒｅｖｉｅｗｅｒ",
+    "surface": "reviewer",
     "yomi": "レビュータントウ"
   },
   "206582f6-cd40-48c3-8236-8f5dfe600f8e": {
@@ -47,7 +47,7 @@
     "priority": 5,
     "pronunciation": "ユーエフダブリュウ",
     "stem": "*",
-    "surface": "ｕｆｗ",
+    "surface": "ufw",
     "yomi": "ユーエフダブリュウ"
   },
   "319adbfd-57d1-4fde-ad24-668e41f3a909": {
@@ -81,7 +81,7 @@
     "priority": 5,
     "pronunciation": "ステイト",
     "stem": "*",
-    "surface": "ＳＴＡＴＥ",
+    "surface": "STATE",
     "yomi": "ステイト"
   },
   "3a1824ad-c348-4ed1-933b-f5f19427c582": {
@@ -98,7 +98,7 @@
     "priority": 5,
     "pronunciation": "トゥードゥー",
     "stem": "*",
-    "surface": "ＴＯＤＯ",
+    "surface": "TODO",
     "yomi": "トゥードゥー"
   },
   "428d492b-e783-4373-a3fa-bd184372d9dd": {
@@ -115,7 +115,7 @@
     "priority": 5,
     "pronunciation": "イイエフアイ",
     "stem": "*",
-    "surface": "ｅｆｉ",
+    "surface": "efi",
     "yomi": "イイエフアイ"
   },
   "4b700039-d6c2-4f68-b4d9-002022f9b85d": {
@@ -132,7 +132,7 @@
     "priority": 5,
     "pronunciation": "ジェイソン",
     "stem": "*",
-    "surface": "ｊｓｏｎ",
+    "surface": "json",
     "yomi": "ジェイソン"
   },
   "50e54cae-ac40-40a5-86c3-cd0257267c30": {
@@ -149,7 +149,7 @@
     "priority": 5,
     "pronunciation": "スラッシュエトセスラッシュ",
     "stem": "*",
-    "surface": "／ｅｔｃ／",
+    "surface": "/etc/",
     "yomi": "スラッシュエトセスラッシュ"
   },
   "5875cf9a-cb7a-4826-9b06-43b5ee91b4e6": {
@@ -166,7 +166,7 @@
     "priority": 5,
     "pronunciation": "ケンショウタントウ",
     "stem": "*",
-    "surface": "Ｖｅｒｉｆｉｅｒ",
+    "surface": "Verifier",
     "yomi": "ケンショウタントウ"
   },
   "5c48dfa4-6b02-4843-9ae5-3ca19ffc11a2": {
@@ -183,7 +183,7 @@
     "priority": 5,
     "pronunciation": "クロード",
     "stem": "*",
-    "surface": "ＣＬＡＵＤＥ",
+    "surface": "CLAUDE",
     "yomi": "クロード"
   },
   "67516aa0-9393-4f2d-ae3e-90905601600a": {
@@ -200,7 +200,7 @@
     "priority": 5,
     "pronunciation": "スラッシュ",
     "stem": "*",
-    "surface": "／",
+    "surface": "/",
     "yomi": "スラッシュ"
   },
   "69142820-1fd3-491c-867e-2ba73e542518": {
@@ -217,7 +217,7 @@
     "priority": 5,
     "pronunciation": "エトセ",
     "stem": "*",
-    "surface": "ｅｔｃ",
+    "surface": "etc",
     "yomi": "エトセ"
   },
   "7e83d072-80f9-4150-91a7-521e02d18cfd": {
@@ -251,7 +251,7 @@
     "priority": 5,
     "pronunciation": "ケンショウタントウ",
     "stem": "*",
-    "surface": "ｖｅｒｉｆｉｅｒ",
+    "surface": "verifier",
     "yomi": "ケンショウタントウ"
   },
   "973b220b-d56d-467d-b813-f2cbb7a2c7d9": {
@@ -285,7 +285,7 @@
     "priority": 5,
     "pronunciation": "ジェイソン",
     "stem": "*",
-    "surface": "ＪＳＯＮ",
+    "surface": "JSON",
     "yomi": "ジェイソン"
   },
   "ab1c836b-6f46-43f9-b4cd-468f54385002": {
@@ -319,7 +319,7 @@
     "priority": 5,
     "pronunciation": "レビュータントウ",
     "stem": "*",
-    "surface": "Ｒｅｖｉｅｗｅｒ",
+    "surface": "Reviewer",
     "yomi": "レビュータントウ"
   },
   "b5b54622-a0dc-4d40-9312-a691f03dd138": {
@@ -336,7 +336,7 @@
     "priority": 5,
     "pronunciation": "スラッシュエトセ",
     "stem": "*",
-    "surface": "／ｅｔｃ",
+    "surface": "/etc",
     "yomi": "スラッシュエトセ"
   },
   "cd5eef0a-5e1b-4c85-9985-bf59d70f6227": {
@@ -353,7 +353,7 @@
     "priority": 5,
     "pronunciation": "ドットエムディー",
     "stem": "*",
-    "surface": "．ｍｄ",
+    "surface": ".md",
     "yomi": "ドットエムディー"
   },
   "cf128115-f355-4f8c-ad18-3eca8c0f83de": {
@@ -370,7 +370,7 @@
     "priority": 5,
     "pronunciation": "エーシーピーアイ",
     "stem": "*",
-    "surface": "ａｃｐｉ",
+    "surface": "acpi",
     "yomi": "エーシーピーアイ"
   },
   "d75fa89b-7699-490e-bc9e-29951a15b45e": {
@@ -387,7 +387,7 @@
     "priority": 5,
     "pronunciation": "システムディー",
     "stem": "*",
-    "surface": "ｓｙｓｔｅｍｄ",
+    "surface": "systemd",
     "yomi": "システムディー"
   },
   "d94404c9-c609-4348-bc9e-a47bc96a5517": {
@@ -404,7 +404,7 @@
     "priority": 5,
     "pronunciation": "メルパ",
     "stem": "*",
-    "surface": "ＭＥＬＰＡ",
+    "surface": "MELPA",
     "yomi": "メルパ"
   },
   "debcd5ca-41db-48a5-a94d-eb3f4f4d2b68": {
@@ -421,7 +421,7 @@
     "priority": 5,
     "pronunciation": "ライセンス",
     "stem": "*",
-    "surface": "ＬＩＣＥＮＳＥ",
+    "surface": "LICENSE",
     "yomi": "ライセンス"
   },
   "e8587f70-4e27-4017-aa5c-7c5bfdf4251f": {
@@ -438,7 +438,7 @@
     "priority": 5,
     "pronunciation": "リードミー",
     "stem": "*",
-    "surface": "ＲＥＡＤＭＥ",
+    "surface": "README",
     "yomi": "リードミー"
   },
   "e935527e-e4e4-49bc-b617-e28233f3a31f": {
@@ -455,7 +455,7 @@
     "priority": 5,
     "pronunciation": "ハイパーウィスパー",
     "stem": "*",
-    "surface": "ｈｙｐｒｗｈｓｐｒ",
+    "surface": "hyprwhspr",
     "yomi": "ハイパーウィスパー"
   },
   "ef19eecf-860a-4a75-b454-4b0d40f925a6": {
@@ -489,7 +489,7 @@
     "priority": 5,
     "pronunciation": "アーカイブズ",
     "stem": "*",
-    "surface": "ａｒｃｈｉｖｅｓ",
+    "surface": "archives",
     "yomi": "アーカイブズ"
   },
   "ff7e7071-96e5-4a5b-a3a7-dc662fcf09d7": {
@@ -506,7 +506,7 @@
     "priority": 5,
     "pronunciation": "トゥドゥ",
     "stem": "*",
-    "surface": "ＴＯＤＯ－",
+    "surface": "TODO-",
     "yomi": "トゥドゥ"
   }
 }

@@ -72,6 +72,15 @@ def accent_of(phrases):
     return first["accent"]
 
 
+# 全角の英数字・記号（！〜～）を半角へ。NFKC は半角カナなども変えるので使わない
+HALF = {c: c - 0xFEE0 for c in range(0xFF01, 0xFF5F)}
+
+
+def halfwidth(text):
+    """エンジンが全角にして持つ表記を、表示・書き出し用に半角へ戻す。"""
+    return text.translate(HALF)
+
+
 def find(surface):
     """同じ表記の単語の (ID, 中身)。エンジンは英数字を全角にして持つので、NFKC で揃えて比べる。"""
     words = json.loads(call("GET", "/user_dict"))
@@ -87,6 +96,8 @@ def demo():
     assert accent_of([ph(4, 4)]) == 0  # トモダチ（平板）
     assert accent_of([ph(1, 2), ph(1, 3)]) == 1  # リードミー（リ'イ/ド'ミイ）
     assert accent_of([ph(2, 2), ph(1, 3)]) == 2  # 先頭の句の最後でも、句が 2 つなら平板にしない
+    assert halfwidth("！／ｅｔｃ／ＴＯＤＯ－０１～") == "!/etc/TODO-01~"  # 範囲の両端も
+    assert halfwidth("ｶﾅ　語") == "ｶﾅ　語"  # 半角カナと全角スペースは変えない
     print("ok")
 
 
@@ -140,8 +151,8 @@ def kana(text):
 def list_():
     """登録した単語を、表記順に 1 単語 1 行で一覧する（ID・表記・読み・accent_type）。"""
     words = json.loads(call("GET", "/user_dict"))
-    for uuid, w in sorted(words.items(), key=lambda kv: kv[1]["surface"]):
-        print(f"{uuid}  {w['surface']}  {w['pronunciation']}  {w['accent_type']}")
+    for uuid, w in sorted(words.items(), key=lambda kv: halfwidth(kv[1]["surface"])):
+        print(f"{uuid}  {halfwidth(w['surface'])}  {w['pronunciation']}  {w['accent_type']}")
 
 
 @dict_group.command("remove")
@@ -158,8 +169,13 @@ def remove(surface):
 @dict_group.command("export")
 @click.argument("file", type=click.File("w", encoding="utf-8"), default="-")
 def export(file):
-    """辞書を書き出す。FILE を省くと標準出力。voicevox/user_dict.json と同じ形にする。"""
+    """辞書を書き出す。FILE を省くと標準出力。voicevox/user_dict.json と同じ形にする。
+
+    表記は半角にする（import するとエンジンが全角に直す）。
+    """
     words = json.loads(call("GET", "/user_dict"))
+    for w in words.values():
+        w["surface"] = halfwidth(w["surface"])
     json.dump(words, file, indent=2, sort_keys=True, ensure_ascii=False)
     file.write("\n")
 
