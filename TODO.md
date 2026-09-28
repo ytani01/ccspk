@@ -1,6 +1,6 @@
 # TODO
 
-**残っている項目: TODO-020〜TODO-023。** これまでに 19 件を決着させた。
+**残っている項目: TODO-020・TODO-021・TODO-023。** これまでに 20 件を決着させた。
 新しく足すときは「完了済み」の上に節を作る。**番号は `TODO-024` から。**
 
 ---
@@ -43,90 +43,6 @@
 表記も半角で読めるようにするため（利用者が決めた。2026-09-29）。
 `import` は上書きと追加だけをする。ファイルに無い単語がエンジンにあっても消さない（今と同じ）。
 TODO-022 の改名を先にやる（パスが `~/.config/ccspk/` になるため）。
-
----
-
-## TODO-022. コマンド名とリポジトリ名を ccspk にする
-
-|      | main | 担当 |
-|------|------|------|
-| 見込み | Opus 5.5 / effort medium | main（実装）+ verifier（Sonnet 5.5 / medium） |
-
-- [x] `pyproject.toml` の `name` と `[project.scripts]`、`src/claudecodespeak/` を `ccspk` にする
-  （`git mv`。`hook.py` の `MODULE` も）。`uv.lock` は `uv sync` で作り直す
-- [x] 実行時のファイル名 `claude-tts`（`hook.py` の `BASE`）を `ccspk` にする
-- [x] 環境変数 `CLAUDE_TTS_SPEAK` を `CCSPK_SPEAK` にする（`~/.claude/settings.json` の `env` も。
-  verifier が見つけ、利用者が決めた。2026-09-29）
-- [x] 文書（`README.md`・`CLAUDE.md`・`docs/`・`TODO.md`）とコード中の旧名を直す。
-  対象は `rg -n -i -e claudecodespeak -e claude-tts --hidden -g '!.git' -g '!archives'`
-- [x] `~/.claude/settings.json` のフックのコマンド（2 か所）を `ccspk hook` にし、
-  `uv tool install .` と `uv tool uninstall claudecodespeak` で入れ替える（Claude がやる）
-- [x] GitHub のリポジトリを改名し、remote を向け直す（Claude がやる。push はしない）
-  - `gh repo rename ccspk -R ytani01/claudecodespeak --yes`
-  - `git remote set-url origin git@github.com:ytani01/ccspk.git`
-- [x] 手元のディレクトリを移すスクリプト `archives/agents/TODO-022/move-dir.sh` を作る。
-  Claude Code の作業ディレクトリそのものを移すので、ここだけは Claude Code を終了してから
-  利用者が走らせる。スクリプトがやること:
-  - 先に確かめて、どれか外れたら何もせず止まる: `~/work/claudecodespeak` がある、
-    `~/work/ccspk` と `~/.claude/projects/-home-ytani-work-ccspk` が無い
-  - `~/work/claudecodespeak` → `~/work/ccspk`、
-    `~/.claude/projects/-home-ytani-work-claudecodespeak` → `-home-ytani-work-ccspk`（メモリの置き場所）
-  - `.venv` を消して `uv sync`（中のスクリプトの 1 行目が旧いパスの python を指すため）
-  - `uv tool install --reinstall .`（`~/.local/share/uv/tools/ccspk/uv-receipt.toml` が旧いディレクトリを指すため）
-  - 旧いパスを指す symlink 2 本
-    （`~/.config/systemd/user/voicevox-engine.service` と `default.target.wants/` の下）を消し、
-    `systemctl --user daemon-reload`・`link ~/work/ccspk/systemd/voicevox-engine.service`・
-    `enable voicevox-engine.service`。エンジンは止めない（unit ファイルの中身は変わらない）
-  - 最後に `command -v ccspk`、`command -v claudecodespeak` が空であること、`ccspk status` を表示する
-- [ ] 利用者に、下の「利用者がやること」を伝える
-
-### 利用者がやること
-
-Claude の作業のコミットが済んでから、この順にやる。
-
-1. Claude Code を終了する（`/exit`）
-2. 端末で次を走らせる
-
-   ```sh
-   ~/work/claudecodespeak/archives/agents/TODO-022/move-dir.sh
-   ```
-
-3. 最後の表示を見る
-   - `command -v ccspk` が `~/.local/bin/ccspk`
-   - `command -v claudecodespeak` が何も出さない
-   - `ccspk status` がエンジンを使えると言っている
-4. 途中で止まったら、表示されたメッセージを控えて、`~/work/claudecodespeak` か `~/work/ccspk` の
-   残っているほうで Claude Code を起動し、そのメッセージを渡す
-5. 新しいディレクトリで Claude Code を起動し直す
-
-   ```sh
-   cd ~/work/ccspk && claude
-   ```
-
-6. 何か話しかけて、返答が読み上げられることを確かめる
-7. メモリが引き継がれていることを確かめる。端末で次を走らせ、2 行が出ること
-
-   ```sh
-   cat ~/.claude/projects/-home-ytani-work-ccspk/memory/MEMORY.md
-   ```
-
-   ```
-   - [文書の変更も TODO に立てる](todo-for-doc-changes.md) — 文書だけの作業でも項目を立て、移す作業には reviewer を付ける
-   - [「語」でなく「単語」](say-tango-not-go.md) — 辞書に登録するものは「単語」と書く
-   ```
-8. 確かめた結果を Claude に伝える（Claude が TODO-022 を決着させる）
-
-- `archives/` と過去のコミットメッセージの旧名は、記録なので直さない
-- 挙動は名前以外変わらないので、reviewer は置かない
-- verifier に確かめさせること
-  - 旧名が残っていない
-  - `ccspk test` が通る
-  - 入れ替えたあとのフックで読み上げが鳴る
-  - `move-dir.sh` が、移すべきものを移し、呼ぶべきコマンドを呼ぶ。`HOME` を一時ディレクトリにし、
-    `uv`・`systemctl` を記録するだけの偽物を `PATH` の先頭に置いて走らせる（本物の環境では走らせない）
-  - `move-dir.sh` が、前提が外れたときに何も変えずに止まる（1 通り）
-- 切り替えの瞬間に鳴っている旧名の読み上げは、新しいフックから止められない
-  （`stop_playing()` は `MODULE` で見分ける）。一度きりなので対処しない
 
 ---
 
