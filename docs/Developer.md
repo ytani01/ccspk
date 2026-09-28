@@ -4,7 +4,7 @@
 （`cli.py` がまとめる）。フックは `hook.py`（`claudecodespeak hook`）、辞書に語を足すのは
 `add_word.py`（`claudecodespeak add-word`）。依存は click、loguru、
 VOICEVOX のエンジン（`127.0.0.1:50021`）、`pw-play`。読み上げの範囲や切り方など、
-利用者から見た動きは下の「動き方」、入れ方と辞書は
+利用者から見た動きは下の「動き方」、インストールと辞書は
 [UsersGuide](UsersGuide.md) にある。
 
 ## 動き方
@@ -39,7 +39,7 @@ VOICEVOX のエンジン（`127.0.0.1:50021`）、`pw-play`。読み上げの範
   `PreToolUse` も `agent_id` があれば読まない）
 - `pw-play` が無い、エンジンに接続できない、PipeWire が動いていない、のどれかなら
   鳴らさずに終わり、使えないことを覚えて、次からは確かめもせずに終わる。
-  戻し方は [UsersGuide.md](UsersGuide.md#使えないと覚えたとき) にある
+  戻し方は [UsersGuide.md](UsersGuide.md#読み上げが止まったままのとき) にある
 
 ## フックの仕組み
 
@@ -107,7 +107,7 @@ MessageDisplay フックとして、`AskUserQuestion` を呼ぶ直前に PreTool
 プロセスに使い回されていることがあるので、`/proc/<pid>/cmdline` に `--play` と
 `claudecodespeak.hook` があるときだけ送る（子プロセスの起こし方は上の「子プロセス」）。
 
-### 使えないと覚える
+### 鳴らせるかを確かめる
 
 `unusable()` は次の順に見て、最初にだめだったものの理由を返す。
 
@@ -115,7 +115,7 @@ MessageDisplay フックとして、`AskUserQuestion` を呼ぶ直前に PreTool
 2. エンジンに TCP で接続できるか。HTTP では問い合わせず、接続できるかだけを見る
 3. PipeWire のソケットに接続できるか。場所は `$PIPEWIRE_RUNTIME_DIR`（無ければ
    `$XDG_RUNTIME_DIR`）の `pipewire-0`。`PIPEWIRE_REMOTE` があるときは確かめない
-   （理由は [UsersGuide](UsersGuide.md#使えないと覚えたとき)）
+   （理由は [UsersGuide](UsersGuide.md#読み上げが止まったままのとき)）
 
 使えるときは、3 つ合わせて 1 ms ほどで終わる。
 
@@ -163,12 +163,15 @@ MessageDisplay フックとして、`AskUserQuestion` を呼ぶ直前に PreTool
 | `PARTS_KEEP` | 600 | そろわないまま残った MessageDisplay の分は、この秒数で消す |
 | `SAME_WITHIN` | 5 | 読んでからこの秒数のうちに同じ文が来たら読まない。長くすると、続けて同じ返答（「はい。」など）が来たときに黙ってしまう |
 
+`ENGINE` と `SPEAKER` は `add_word.py` にもあり、`hook.py` と揃える。
+
 ## テストと動作の確かめ方
 
 ### 自己テスト
 
 整形と分割（`to_speech`、`clip`、`sentences`、`split_first`、`chunks`）は、
-`demo()` の `assert` で確かめている。通れば `ok` と出る。
+`demo()` の `assert` で確かめている（pytest ではない）。通れば `ok` と出る。
+個別に走らせる手段は無い。lint の設定は無い。
 
 ```sh
 uv run claudecodespeak hook --test
@@ -180,13 +183,13 @@ PreToolUse の質問の文を取り出す `questions()` も確かめている。
 整形や分割を変えたら、`demo()` に例を足す。`unusable()` と `main()` の分岐は
 環境に依るので、`demo()` では確かめていない。下の手順で手で確かめる。
 
-### Stop を手で再現する
+### フックを手で動かす
 
 コマンドは、どれもリポジトリの直下で走らせる。`uv sync` で `.venv` に入れておき、
 入れ直さずに手元のコードを試すため `.venv/bin/claudecodespeak` を呼ぶ。
 
 本物の `$XDG_RUNTIME_DIR` で試して `claude-tts.unusable` が残ると、ファイルを
-消すまで読み上げが止まる（[UsersGuide](UsersGuide.md#使えないと覚えたとき)）。
+消すまで読み上げが止まる（[UsersGuide](UsersGuide.md#読み上げが止まったままのとき)）。
 また、本物の `claude-tts.pid` を使うと、そのとき鳴っている読み上げを止めてしまう。
 `XDG_RUNTIME_DIR` を一時ディレクトリに向け、PipeWire の場所だけ
 `PIPEWIRE_RUNTIME_DIR` で本物を指す。

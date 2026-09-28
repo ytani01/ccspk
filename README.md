@@ -11,8 +11,8 @@ Claude Code の返答の冒頭を、手元の VOICEVOX で読み上げるフッ�
 | `src/claudecodespeak/add_word.py` | `claudecodespeak add-word`。VOICEVOX のユーザー辞書に語を足す |
 | `src/claudecodespeak/cli.py` | サブコマンドをまとめる |
 | `systemd/voicevox-engine.service` | VOICEVOX のエンジンを常駐させる user unit |
-| `voicevox/user_dict.json` | VOICEVOX のユーザー辞書の元（読み間違える語の読み） |
-| `docs/UsersGuide.md` | 入れ方、フックの設定、止め方、読み上げの辞書の扱い方 |
+| `voicevox/user_dict.json` | VOICEVOX のユーザー辞書を書き出したもの（読み間違える語の読み） |
+| `docs/UsersGuide.md` | インストール、Claude Code の設定、読み上げの無効化、読み上げの辞書の扱い方 |
 | `docs/Developer.md` | 動き方の細かい決まり、フックの仕組み、テストと動作の確かめ方 |
 
 ## 動き方
@@ -30,12 +30,12 @@ VOICEVOX（夜語トバリ・明るい）で読み上げる。`AskUserQuestion` 
 - 鳴らせない環境では、使えないことを覚えて、次からは確かめもせずに終わる
 
 細かい決まりは [docs/Developer.md](docs/Developer.md#動き方)、辞書と
-使えないと覚えたときの戻し方は [docs/UsersGuide.md](docs/UsersGuide.md) にある。
+読み上げが止まったままのときの戻し方は [docs/UsersGuide.md](docs/UsersGuide.md) にある。
 
-## 入れ方
+## インストール
 
-エンジンの入れ方、Claude Code のフックの設定、止め方は
-[docs/UsersGuide.md](docs/UsersGuide.md#入れ方) にある。
+エンジンのインストール、Claude Code の設定、読み上げを無効にする方法は
+[docs/UsersGuide.md](docs/UsersGuide.md#インストール) にある。
 
 ## TODO の番号
 

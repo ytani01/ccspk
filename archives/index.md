@@ -4,6 +4,7 @@
 作り直すので、手で直さない。やらないと決めたものは（対応しない）が付いている。
 進行中の項目は [TODO.md](../TODO.md) にある。
 
+- [TODO-014. CLAUDE.md の仕組みの説明を Developer.md へ移し、文書の重複を整理する](todo/TODO-014.%20CLAUDE.md%20%E3%81%AE%E4%BB%95%E7%B5%84%E3%81%BF%E3%81%AE%E8%AA%AC%E6%98%8E%E3%82%92%20Developer.md%20%E3%81%B8%E7%A7%BB%E3%81%97%E3%80%81%E6%96%87%E6%9B%B8%E3%81%AE%E9%87%8D%E8%A4%87%E3%82%92%E6%95%B4%E7%90%86%E3%81%99%E3%82%8B.md)
 - [TODO-013. Developer.md の定数の表を hook.py に合わせる](todo/TODO-013.%20Developer.md%20%E3%81%AE%E5%AE%9A%E6%95%B0%E3%81%AE%E8%A1%A8%E3%82%92%20hook.py%20%E3%81%AB%E5%90%88%E3%82%8F%E3%81%9B%E3%82%8B.md)
 - [TODO-012. 質問してくるときも、質問の文を読み上げる](todo/TODO-012.%20%E8%B3%AA%E5%95%8F%E3%81%97%E3%81%A6%E3%81%8F%E3%82%8B%E3%81%A8%E3%81%8D%E3%82%82%E3%80%81%E8%B3%AA%E5%95%8F%E3%81%AE%E6%96%87%E3%82%92%E8%AA%AD%E3%81%BF%E4%B8%8A%E3%81%92%E3%82%8B.md)
 - [TODO-011. Python のコードを uv で管理し、`uv tool install .` で入れる](todo/TODO-011.%20Python%20%E3%81%AE%E3%82%B3%E3%83%BC%E3%83%89%E3%82%92%20uv%20%E3%81%A7%E7%AE%A1%E7%90%86%E3%81%97%E3%80%81%60uv%20tool%20install%20.%60%20%E3%81%A7%E5%85%A5%E3%82%8C%E3%82%8B.md)
