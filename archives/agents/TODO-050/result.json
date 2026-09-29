@@ -1,0 +1,365 @@
+{
+ "at": "2026-09-29T21:55:30.939858",
+ "runs": [
+  {
+   "kind": "要約",
+   "size": "2049字",
+   "usage": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 4791,
+    "cache_read_input_tokens": 3051,
+    "output_tokens": 121,
+    "output_tokens_details": {
+     "thinking_tokens": 0
+    },
+    "server_tool_use": {
+     "web_search_requests": 0,
+     "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+     "ephemeral_1h_input_tokens": 4791,
+     "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+     {
+      "input_tokens": 2,
+      "output_tokens": 121,
+      "cache_read_input_tokens": 3051,
+      "cache_creation_input_tokens": 4791,
+      "cache_creation": {
+       "ephemeral_5m_input_tokens": 0,
+       "ephemeral_1h_input_tokens": 4791
+      },
+      "type": "message"
+     }
+    ],
+    "speed": "standard"
+   },
+   "cost": 0.020988200000000002,
+   "sec": 2.198,
+   "rc": 0
+  },
+  {
+   "kind": "要約",
+   "size": "2402字",
+   "usage": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 3417,
+    "cache_read_input_tokens": 4668,
+    "output_tokens": 140,
+    "output_tokens_details": {
+     "thinking_tokens": 0
+    },
+    "server_tool_use": {
+     "web_search_requests": 0,
+     "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+     "ephemeral_1h_input_tokens": 3417,
+     "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+     {
+      "input_tokens": 2,
+      "output_tokens": 140,
+      "cache_read_input_tokens": 4668,
+      "cache_creation_input_tokens": 3417,
+      "cache_creation": {
+       "ephemeral_5m_input_tokens": 0,
+       "ephemeral_1h_input_tokens": 3417
+      },
+      "type": "message"
+     }
+    ],
+    "speed": "standard"
+   },
+   "cost": 0.0160056,
+   "sec": 2.468,
+   "rc": 0
+  },
+  {
+   "kind": "要約",
+   "size": "2709字",
+   "usage": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 3681,
+    "cache_read_input_tokens": 4668,
+    "output_tokens": 131,
+    "output_tokens_details": {
+     "thinking_tokens": 0
+    },
+    "server_tool_use": {
+     "web_search_requests": 0,
+     "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+     "ephemeral_1h_input_tokens": 3681,
+     "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+     {
+      "input_tokens": 2,
+      "output_tokens": 131,
+      "cache_read_input_tokens": 4668,
+      "cache_creation_input_tokens": 3681,
+      "cache_creation": {
+       "ephemeral_5m_input_tokens": 0,
+       "ephemeral_1h_input_tokens": 3681
+      },
+      "type": "message"
+     }
+    ],
+    "speed": "standard"
+   },
+   "cost": 0.0169716,
+   "sec": 1.81,
+   "rc": 0
+  },
+  {
+   "kind": "翻訳",
+   "size": "540字",
+   "usage": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 1698,
+    "cache_read_input_tokens": 4668,
+    "output_tokens": 254,
+    "output_tokens_details": {
+     "thinking_tokens": 0
+    },
+    "server_tool_use": {
+     "web_search_requests": 0,
+     "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+     "ephemeral_1h_input_tokens": 1698,
+     "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+     {
+      "input_tokens": 2,
+      "output_tokens": 254,
+      "cache_read_input_tokens": 4668,
+      "cache_creation_input_tokens": 1698,
+      "cache_creation": {
+       "ephemeral_5m_input_tokens": 0,
+       "ephemeral_1h_input_tokens": 1698
+      },
+      "type": "message"
+     }
+    ],
+    "speed": "standard"
+   },
+   "cost": 0.0102696,
+   "sec": 3.501,
+   "rc": 0
+  },
+  {
+   "kind": "翻訳",
+   "size": "540字",
+   "usage": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 2516,
+    "cache_read_input_tokens": 531,
+    "output_tokens": 249,
+    "output_tokens_details": {
+     "thinking_tokens": 0
+    },
+    "server_tool_use": {
+     "web_search_requests": 0,
+     "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+     "ephemeral_1h_input_tokens": 2516,
+     "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+     {
+      "input_tokens": 2,
+      "output_tokens": 249,
+      "cache_read_input_tokens": 531,
+      "cache_creation_input_tokens": 2516,
+      "cache_creation": {
+       "ephemeral_5m_input_tokens": 0,
+       "ephemeral_1h_input_tokens": 2516
+      },
+      "type": "message"
+     }
+    ],
+    "speed": "standard"
+   },
+   "cost": 0.0126642,
+   "sec": 2.6,
+   "rc": 0
+  },
+  {
+   "kind": "翻訳",
+   "size": "540字",
+   "usage": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 1697,
+    "cache_read_input_tokens": 4668,
+    "output_tokens": 219,
+    "output_tokens_details": {
+     "thinking_tokens": 0
+    },
+    "server_tool_use": {
+     "web_search_requests": 0,
+     "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+     "ephemeral_1h_input_tokens": 1697,
+     "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+     {
+      "input_tokens": 2,
+      "output_tokens": 219,
+      "cache_read_input_tokens": 4668,
+      "cache_creation_input_tokens": 1697,
+      "cache_creation": {
+       "ephemeral_5m_input_tokens": 0,
+       "ephemeral_1h_input_tokens": 1697
+      },
+      "type": "message"
+     }
+    ],
+    "speed": "standard"
+   },
+   "cost": 0.0099156,
+   "sec": 3.447,
+   "rc": 0
+  },
+  {
+   "kind": "点検",
+   "size": "10単語",
+   "usage": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 3408,
+    "cache_read_input_tokens": 3144,
+    "output_tokens": 109,
+    "output_tokens_details": {
+     "thinking_tokens": 80
+    },
+    "server_tool_use": {
+     "web_search_requests": 0,
+     "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+     "ephemeral_1h_input_tokens": 3408,
+     "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+     {
+      "input_tokens": 2,
+      "output_tokens": 109,
+      "cache_read_input_tokens": 3144,
+      "cache_creation_input_tokens": 3408,
+      "cache_creation": {
+       "ephemeral_5m_input_tokens": 0,
+       "ephemeral_1h_input_tokens": 3408
+      },
+      "type": "message"
+     }
+    ],
+    "speed": "standard"
+   },
+   "cost": 0.0300808,
+   "sec": 3.015,
+   "rc": 0
+  },
+  {
+   "kind": "点検",
+   "size": "20単語",
+   "usage": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 2018,
+    "cache_read_input_tokens": 4761,
+    "output_tokens": 434,
+    "output_tokens_details": {
+     "thinking_tokens": 397
+    },
+    "server_tool_use": {
+     "web_search_requests": 0,
+     "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+     "ephemeral_1h_input_tokens": 2018,
+     "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+     {
+      "input_tokens": 2,
+      "output_tokens": 434,
+      "cache_read_input_tokens": 4761,
+      "cache_creation_input_tokens": 2018,
+      "cache_creation": {
+       "ephemeral_5m_input_tokens": 0,
+       "ephemeral_1h_input_tokens": 2018
+      },
+      "type": "message"
+     }
+    ],
+    "speed": "standard"
+   },
+   "cost": 0.0257842,
+   "sec": 6.75,
+   "rc": 0
+  },
+  {
+   "kind": "点検",
+   "size": "30単語",
+   "usage": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 2245,
+    "cache_read_input_tokens": 4761,
+    "output_tokens": 128,
+    "output_tokens_details": {
+     "thinking_tokens": 72
+    },
+    "server_tool_use": {
+     "web_search_requests": 0,
+     "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+     "ephemeral_1h_input_tokens": 2245,
+     "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+     {
+      "input_tokens": 2,
+      "output_tokens": 128,
+      "cache_read_input_tokens": 4761,
+      "cache_creation_input_tokens": 2245,
+      "cache_creation": {
+       "ephemeral_5m_input_tokens": 0,
+       "ephemeral_1h_input_tokens": 2245
+      },
+      "type": "message"
+     }
+    ],
+    "speed": "standard"
+   },
+   "cost": 0.0214802,
+   "sec": 3.106,
+   "rc": 0
+  }
+ ]
+}
