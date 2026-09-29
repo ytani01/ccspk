@@ -1,6 +1,7 @@
 # 開発者向け
 
-依存は click、loguru、VOICEVOX のエンジン（`127.0.0.1:50021`）、`pw-play`。
+依存は click、loguru、sudachipy と sudachidict_core（自動の点検で単語を切り出す）、VOICEVOX のエンジン
+（`127.0.0.1:50021`）、`pw-play`、`claude`（自動の点検で読みを判定させる）。
 読み上げの範囲や切り方など、利用者から見た動きは下の「2. 動き方」、インストールと辞書は
 [UsersGuide](UsersGuide.md) にある。
 
@@ -14,6 +15,7 @@
 | `src/ccspk/cli.py` | サブコマンドをまとめる。`ccspk test` もここにある |
 | `src/ccspk/hook.py` | `ccspk hook`・`say`・`stop`・`status`。Stop・MessageDisplay・PreToolUse フックとして、返答の冒頭と質問の文を VOICEVOX で読み上げる |
 | `src/ccspk/user_dict.py` | `ccspk dict`。VOICEVOX のユーザー辞書を操作する |
+| `src/ccspk/check.py` | 読み間違いの自動の点検（`python -m ccspk.check`）。フックが読み上げた文を記録し、Stop で裏で起こす（[「3.8 自動の点検」](#38-自動の点検)） |
 | `src/ccspk/__init__.py` | `__version__`（`--version` で出す版） |
 | `src/ccspk/click_utils.py` | `--debug`・`--version` などの共通オプション |
 | `src/ccspk/mylog.py` | loguru のログの設定 |
@@ -53,6 +55,8 @@
 - 鳴らせないとき（条件は下の [「3.4 鳴らせるかを確かめる」](#34-鳴らせるかを確かめる)）は、鳴らさずに終わり、
   使えないことを覚えて、次からは確かめもせずに終わる。
   戻し方は [UsersGuide.md](UsersGuide.md#15-読み上げが止まったままのとき) にある
+- 読み上げた文を記録し、返答が終わるたびに、読み間違いを裏で点検して辞書に登録する
+  （[「3.8 自動の点検」](#38-自動の点検)、[UsersGuide.md](UsersGuide.md#23-読み間違いの自動の点検)）
 
 ## 3. フックの仕組み
 
@@ -183,6 +187,68 @@ MessageDisplay フックとして、`AskUserQuestion` を呼ぶ直前に PreTool
 
 `ENGINE` と `SPEAKER` は `user_dict.py` にもあり、`hook.py` と揃える。
 
+### 3.8 自動の点検
+
+`check.py` が受け持つ。フック（`hook.py` の `main()`）からは次の 2 つだけを呼び、
+sudachipy は読まない（最初の音を遅らせない）。
+
+- `record()` — `speak()` の後で、鳴らす文（`to_speech()` の結果）を `SPOKEN` に追記する。
+  イベントは問わない。フックの `LOCK` を取ったまま呼ぶので、切り詰めがほかのフックとぶつからない
+- `after_stop()` — Stop のとき（`MessageDisplay` でも `PreToolUse` でもない）、`LOCK` を放した後で呼ぶ。
+  同じ文を 2 度読まないで返るときも呼ぶ（`MessageDisplay` が記録した分があるため）。
+  `FAILED` があれば中身を `{"systemMessage": …}` で標準出力に出して消す。`pending()` が真なら
+  （`SPOKEN` があり、`CHECKED` が無いか `SPOKEN` より古いとき）、`python -P -m ccspk.check` を
+  `start_new_session=True`・入出力は捨てる・`cwd` は `STATE` で起こす
+
+`CCSPK_SPEAK` が `1` でない、`UNUSABLE` がある、`unusable()` がだめ、で早く返るときは、どちらも呼ばない。
+状態のファイルの読み書きの `OSError` は捨て、フックを落とさない。
+
+点検（`main()` → `check()`）の流れ:
+
+1. `LOCK` を `LOCK_EX | LOCK_NB` で取る。取れなければ何もせず終わる（前の点検が走っている）
+2. `SPOKEN` の mtime を控えてから読み、`extract()` で単語を切り出す。英字は正規表現 `ALPHA`、
+   漢字は sudachipy（sudachidict_core、`SplitMode.C`）で、品詞の先頭が名詞・漢字を含む・2 字以上のもの。
+   sudachipy は 49,149 バイトより長い入力を断るので、1 行ずつ渡す。`CHECKED` の単語と、エンジンの辞書に
+   登録済みの単語（NFKC で揃えて比べる）を除く
+3. 各単語の読みを `/audio_query` の `kana` で取り、`表記<TAB>読み<TAB>最初に出てきた行の、単語の前後 30 字（around()）` の一覧を
+   `claude -p --model opus --setting-sources "" --tools "" --no-session-persistence PROMPT` の標準入力に渡す。
+   環境変数は `CCSPK_SPEAK=0` に上書きする。`--setting-sources ""` で利用者・プロジェクトの設定を
+   読まないので、点検の `claude` のフックは走らない（`--bare` は OAuth を読まないので使えない）
+4. 返答を `parse()` で読む。表記が渡した一覧に無い行、読みがカタカナ（`ァ-ヴー`）だけでない行、
+   読みがエンジンの `kana` と同じ発音の行（`same()`）は捨てる。残りは、読みを `/audio_query` に通した
+   `kana` でもう一度 `same()` で比べ、同じ発音なら捨てる（エンジンは長音を母音で書く。Claude は
+   「セントオ」を誤りとして「セントー」を返しがち）。残りを 1 単語ずつ `user_dict.register()` で登録し（`dict add` と同じ既定）、`ADDED` に追記する。
+   登録できなかった単語は飛ばして続ける。1 単語でも登録できたら、最後に 1 回 `save()` する
+5. 渡した単語を全部 `CHECKED` に追記し、`CHECKED` の mtime を 2. で控えた `SPOKEN` の mtime に揃える。
+   点検のあいだに足された文があれば、`SPOKEN` のほうが新しくなり、次の Stop で点検し直す
+
+`claude -p` が終わるまでに失敗したら（例外、`claude` の終了コードが 0 でない、`TIMEOUT` 秒で終わらない、
+`user_dict.call()` の `sys.exit`）、理由を `FAILED` に書いて終わり、`CHECKED` は変えない（次の Stop でやり直す）。
+4. の登録や `save()` の失敗は、5. まで済ませてから、失敗した単語を `FAILED` に書く
+（`claude -p` を呼び直さないため）。
+
+`STATE` と `ADDED` は `user_dict.py` に置き、`check.py` はそれを import する（`dict auto` も `ADDED` を使う）。
+
+`dict add`・`dict remove` は `forget_auto()` で、その単語を `ADDED` から外す。`dict auto` は `ADDED` を
+一覧し、`--remove` で載っている単語を全部エンジンから消して `ADDED` を空にする。
+
+状態のファイルは `STATE`（`$XDG_STATE_HOME/ccspk`、無ければ `~/.local/state/ccspk`）に置く。
+中身は [UsersGuide](UsersGuide.md#23-読み間違いの自動の点検) にもある。
+
+| 定数 | 場所 | 中身 |
+|---|---|---|
+| `SPOKEN` | `spoken.txt` | 読み上げた文。1 行 1 文。`SPOKEN_MAX`（64 KiB）を超えたら後ろ半分の行だけ残す |
+| `CHECKED` | `checked.txt` | 点検に回した単語。1 行 1 単語 |
+| `ADDED` | `added.tsv` | 自動で登録した単語。`日時<TAB>表記<TAB>正しい読み<TAB>エンジンの元の読み` |
+| `FAILED` | `failed.txt` | 点検が失敗した理由 |
+| `LOCK` | `check.lock` | 点検を 1 つずつ走らせるためのロック |
+
+| 定数 | 値 | 意味 |
+|---|---|---|
+| `ALPHA` | 正規表現 | 英字の単語（1 字は除く） |
+| `TIMEOUT` | 300 | `claude -p` を待つ秒数 |
+| `PROMPT` | 文 | `claude -p` に渡す指示 |
+
 ## 4. テストと動作の確かめ方
 
 ### 4.1 自己テスト
@@ -191,10 +257,12 @@ hook の `demo()` は、整形と分割（`to_speech`、`drop_commit_ids`、`cli
 `chunks`、`squeeze`）、PreToolUse の質問の文を取り出す `questions()`、MessageDisplay の分をつなぐ
 `assemble()`（一時ディレクトリで）を `assert` で確かめている（pytest ではない）。
 dict の `demo()` は、アクセントの位置の決め方（`accent_of`）と、全角から半角へ戻す `halfwidth` を確かめている。
+check の `demo()` は、単語の切り出し（`extract`）、`claude` の返答の読み取り（`parse`）、点検を起こす条件
+（`pending`）と `SPOKEN` の切り詰め（`record`）を確かめている（後の 2 つは一時ディレクトリで）。
 通れば `ok` と出る。個別に走らせる手段は無い。lint の設定は無い。
 
 ```sh
-uv run ccspk test   # hook と dict の demo() を両方
+uv run ccspk test   # hook・dict・check の demo() を全部
 ```
 
 整形や分割を変えたら、`demo()` に例を足す。`unusable()` と `main()` の分岐は
@@ -210,11 +278,14 @@ uv run ccspk test   # hook と dict の demo() を両方
 また、本物の `ccspk.pid` を使うと、そのとき鳴っている読み上げを止めてしまう。
 `XDG_RUNTIME_DIR` を一時ディレクトリに向け、PipeWire の場所だけ
 `PIPEWIRE_RUNTIME_DIR` で本物を指す。
+読み上げた文の記録（[「3.8 自動の点検」](#38-自動の点検)）が本物に混ざらないよう、`XDG_STATE_HOME` も
+一時ディレクトリに向ける。Stop として渡すと、裏で点検が起こり本物の `claude -p` を呼ぶ（料金がかかる）。
+避けるなら、`PATH` の先頭に決まった行を返すだけの偽の `claude` を置く。
 
 ```sh
 tmp=$(mktemp -d)
 echo '{"last_assistant_message":"確認です。二つ目の文です。"}' \
-  | CCSPK_SPEAK=1 XDG_RUNTIME_DIR=$tmp PIPEWIRE_RUNTIME_DIR=/run/user/$(id -u) \
+  | CCSPK_SPEAK=1 XDG_RUNTIME_DIR=$tmp XDG_STATE_HOME=$tmp PIPEWIRE_RUNTIME_DIR=/run/user/$(id -u) \
     .venv/bin/ccspk hook
 find $tmp -type f
 rm -r $tmp
@@ -259,7 +330,7 @@ import json, os, subprocess, tempfile, time
 from pathlib import Path
 
 tmp = tempfile.mkdtemp()
-env = {**os.environ, "CCSPK_SPEAK": "1", "XDG_RUNTIME_DIR": tmp,
+env = {**os.environ, "CCSPK_SPEAK": "1", "XDG_RUNTIME_DIR": tmp, "XDG_STATE_HOME": tmp,
        "PIPEWIRE_RUNTIME_DIR": f"/run/user/{os.getuid()}"}
 t0 = time.monotonic()
 subprocess.run([".venv/bin/ccspk", "hook"], text=True, env=env, check=True,

@@ -27,6 +27,7 @@ from pathlib import Path
 
 import click
 
+from . import check
 from .mylog import getLogger
 
 LIMIT = 180  # 読み上げるのはおよそここまで。超えるときは次の文末（無ければ読点）まで
@@ -523,9 +524,12 @@ def main():
             except OSError:
                 pass
             speak(text)
+            check.record(text)
     finally:
         if lock:
             lock.close()
+        if not (display or ask):
+            check.after_stop()  # 同じ文を 2 度読まないで返るときも（MessageDisplay が記録した分がある）
 
 
 @click.command()

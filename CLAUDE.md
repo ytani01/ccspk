@@ -20,8 +20,9 @@ uv tool install .         # 利用者の環境へ入れる
 - 整形や分割を変えたら `demo()` に例を足す
 - `src/` か `pyproject.toml` を変えると、返答の終わりに Stop フック（`.claude/settings.json`）が
   `ccspk test` を走らせ、通れば入れ直す。詳しくは `docs/Developer.md` の「4.4 入れ直し」
-- フックを手で動かすときは、本物の `$XDG_RUNTIME_DIR` を使わない（読み上げが止まったままに
-  なったり、鳴っている読み上げを止めたりする）。手順は `docs/Developer.md` の「4.2 フックを手で動かす」
+- フックを手で動かすときは、本物の `$XDG_RUNTIME_DIR` と `$XDG_STATE_HOME` を使わない（読み上げが止まったままに
+  なったり、鳴っている読み上げを止めたり、読み間違いの点検の記録に混ざったりする）。Stop として動かすと
+  裏で本物の `claude -p` が走り、料金がかかる。手順は `docs/Developer.md` の「4.2 フックを手で動かす」
 - 辞書はリポジトリに置かない。`dict add`・`remove`・`import` が `~/.config/ccspk/user_dict.json` へ
   書き出し、エンジンの起動時に読み込む（`docs/UsersGuide.md` の「2.1 辞書のファイル」）。
   試すときは `XDG_CONFIG_HOME` を一時ディレクトリに向ける

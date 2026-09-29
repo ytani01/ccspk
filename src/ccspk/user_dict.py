@@ -4,6 +4,7 @@
   ccspk dict kana <文>
   ccspk dict list
   ccspk dict remove <表記>
+  ccspk dict auto [--remove]
   ccspk dict export [FILE]
   ccspk dict import [FILE]
 
@@ -34,6 +35,10 @@ _log = getLogger("dict")
 ENGINE = "http://127.0.0.1:50021"
 SPEAKER = 119  # 夜語トバリ（明るい）。hook.py と揃える
 DICT_FILE = Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config") / "ccspk" / "user_dict.json"
+# 自動の点検（check.py）の状態のディレクトリと、自動で登録した単語の一覧
+# （日時<TAB>表記<TAB>正しい読み<TAB>エンジンの元の読み）
+STATE = Path(os.environ.get("XDG_STATE_HOME") or Path.home() / ".local/state") / "ccspk"
+ADDED = STATE / "added.tsv"
 # 品詞。エンジンは word_type を品詞の組にして持つので、書き換えるときはここから引き戻す
 TYPES = {
     ("名詞", "固有名詞"): "PROPER_NOUN",
@@ -111,6 +116,37 @@ def save():
     print(f"書き出した: {DICT_FILE}")
 
 
+def register(surface, pronunciation, accent=None, type_=None, priority=None):
+    """単語を足す。同じ表記が登録済みなら書き換える。書き出し（save()）はしない。
+
+    accent を省くとエンジンに任せる。type_ を省くと、新しい単語は PROPER_NOUN、登録済みの単語は
+    今の品詞のまま。priority を省くと、新しい単語は 7、登録済みの単語は今の優先度のまま。
+    """
+    accent = accent if accent is not None else accent_of(query(pronunciation)["accent_phrases"])
+    word = dict(surface=surface, pronunciation=pronunciation, accent_type=accent)
+    _log.debug(f"word={word}")
+    uuid, old = find(surface)
+    if uuid:
+        kept = TYPES.get((old["part_of_speech"], old["part_of_speech_detail_1"]), "PROPER_NOUN")
+        call("PUT", f"/user_dict_word/{uuid}", **word, word_type=type_ or kept, priority=old["priority"] if priority is None else priority)
+        print(f"書き換えた: {surface} → {pronunciation}（accent_type {accent}、ID {uuid}）")
+    else:
+        uuid = json.loads(call("POST", "/user_dict_word", **word, word_type=type_ or "PROPER_NOUN", priority=7 if priority is None else priority))
+        print(f"登録した: {surface} → {pronunciation}（accent_type {accent}、ID {uuid}）")
+
+
+def forget_auto(surface):
+    """手で登録・削除した単語を、自動で登録した単語の記録（ADDED）から外す。"""
+    key = unicodedata.normalize("NFKC", surface)
+    try:
+        rows = ADDED.read_text(encoding="utf-8").splitlines(keepends=True)
+    except OSError:
+        return
+    kept = [r for r in rows if unicodedata.normalize("NFKC", (r.split("\t") + [""])[1]) != key]
+    if len(kept) != len(rows):
+        ADDED.write_text("".join(kept), encoding="utf-8")
+
+
 def demo():
     def ph(accent, moras):
         return {"accent": accent, "moras": [{}] * moras}
@@ -141,17 +177,8 @@ def add(surface, pronunciation, accent, type_, priority, speak):
 
     SURFACE は表記（英字は大文字と小文字を別の単語として扱う）、PRONUNCIATION は読み（カタカナ）。
     """
-    accent = accent if accent is not None else accent_of(query(pronunciation)["accent_phrases"])
-    word = dict(surface=surface, pronunciation=pronunciation, accent_type=accent)
-    _log.debug(f"word={word}")
-    uuid, old = find(surface)
-    if uuid:
-        kept = TYPES.get((old["part_of_speech"], old["part_of_speech_detail_1"]), "PROPER_NOUN")
-        call("PUT", f"/user_dict_word/{uuid}", **word, word_type=type_ or kept, priority=old["priority"] if priority is None else priority)
-        print(f"書き換えた: {surface} → {pronunciation}（accent_type {accent}、ID {uuid}）")
-    else:
-        uuid = json.loads(call("POST", "/user_dict_word", **word, word_type=type_ or "PROPER_NOUN", priority=7 if priority is None else priority))
-        print(f"登録した: {surface} → {pronunciation}（accent_type {accent}、ID {uuid}）")
+    register(surface, pronunciation, accent, type_, priority)
+    forget_auto(surface)
     save()
     q = query(surface)
     print(f"読み: {q['kana']}")
@@ -187,6 +214,33 @@ def remove(surface):
         sys.exit(f"登録されていない: {surface}")
     call("DELETE", f"/user_dict_word/{uuid}")
     print(f"消した: {surface}（ID {uuid}）")
+    forget_auto(surface)
+    save()
+
+
+@dict_group.command("auto")
+@click.option("--remove", "remove_", is_flag=True, help="一覧の単語を全部エンジンから消し、一覧を空にする")
+def auto(remove_):
+    """自動の点検で登録した単語を一覧する（日時・表記・正しい読み・エンジンの元の読み）。"""
+    try:
+        rows = [r.split("\t") for r in ADDED.read_text(encoding="utf-8").splitlines() if r]
+    except FileNotFoundError:
+        rows = []
+    if not rows:
+        print("自動で登録した単語は無い")
+        return
+    for r in rows:
+        print("  ".join(r))
+    if not remove_:
+        return
+    for r in rows:
+        uuid, _old = find(r[1])
+        if uuid:
+            call("DELETE", f"/user_dict_word/{uuid}")
+            print(f"消した: {r[1]}（ID {uuid}）")
+        else:
+            print(f"登録されていない（飛ばした）: {r[1]}")
+    ADDED.write_text("", encoding="utf-8")
     save()
 
 

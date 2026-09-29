@@ -3,6 +3,7 @@
 import click
 
 from . import __version__
+from .check import demo as check_demo
 from .click_utils import click_common_opts
 from .hook import demo as hook_demo
 from .hook import main as hook
@@ -24,9 +25,10 @@ def cli(ctx, debug):
 
 @cli.command("test")
 def test():
-    """hook と dict の自己テストを走らせる。"""
+    """hook・dict・check の自己テストを走らせる。"""
     hook_demo()
     dict_demo()
+    check_demo()
 
 
 cli.add_command(hook, name="hook")

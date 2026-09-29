@@ -1,0 +1,10 @@
+sonnet word: 見つけた 0/6（）、誤判定 0（）、$0.015、2.6 秒
+  返答: 採番	サイバ'ン / 文目	アヤメ' / 冪等	ミョオト'オ / 閾値	イキチ' / 分岐	ブンキ'
+sonnet context: 見つけた 6/6（採番 TODO CLAUDE README JSON 文目）、誤判定 1（閾値→イキチ）、$0.012、3.6 秒
+  返答: 採番	サイバン / TODO	トゥードゥー / CLAUDE	クロード / README	リードミー / JSON	ジェイソン / 文目	ブンメ / XDG	エックスディージー / tr	ティーアール / 測定	ソクテイ / 冪等	ベキトウ / 閾値	イキチ / 突合	トツゴウ
+opus context: 見つけた 6/6（採番 TODO CLAUDE README JSON 文目）、誤判定 0（）、$0.041、4.8 秒
+  返答: 採番	サイバン / TODO	トゥードゥー / CLAUDE	クロード / README	リードミー / JSON	ジェイソン / 文目	ブンメ
+sonnet context: 見つけた 6/6（採番 TODO CLAUDE README JSON 文目）、誤判定 1（no-op→ノーオペ）、$0.002、1.9 秒
+  返答: 採番	サイバン / TODO	トゥードゥー / CLAUDE	クロード / README	リードミー / JSON	ジェイソン / 文目	ブンメ / tr	ティーアール / ok	オーケー / no-op	ノーオペ / 冪等	ベキトウ / 閾値	シキイチ
+opus context: 見つけた 6/6（採番 TODO CLAUDE README JSON 文目）、誤判定 0（）、$0.010、6.5 秒
+  返答: 採番	サイバン / TODO	トゥードゥー / CLAUDE	クロード / README	リードミー / JSON	ジェイソン / 文目	ブンメ
