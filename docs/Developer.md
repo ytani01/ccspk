@@ -144,6 +144,8 @@ MessageDisplay フックとして、`AskUserQuestion` を呼ぶ直前に PreTool
 `synthesize()` は、エンジンの `/audio_query` と `/synthesis` を続けて呼ぶ。
 エンジンは要求を 1 つずつ処理し、止めた前の返答の合成も最後まで続けるので、
 その後ろに並ぶと待たされる。タイムアウトを 60 秒と長めにしているのはそのため。
+`/synthesis` には `enable_interrogative_upspeak=false` を渡す。渡さないと、エンジンは「？」「?」で終わる文の
+語尾に、上げ調子の「ァ」を 1 音足す（「…ですか」が「…ですかぁ」と伸びて聞こえる）。
 
 ### 3.3 前の再生を止める
 

@@ -378,7 +378,8 @@ def synthesize(sentence):
     ).read()
     return urllib.request.urlopen(
         urllib.request.Request(
-            f"{ENGINE}/synthesis?speaker={SPEAKER}",
+            # 「？」「?」で終わる文に語尾を上げる「ァ」を足させない（「かぁ」と伸びて聞こえる）
+            f"{ENGINE}/synthesis?speaker={SPEAKER}&enable_interrogative_upspeak=false",
             data=query,
             headers={"Content-Type": "application/json"},
         ),
