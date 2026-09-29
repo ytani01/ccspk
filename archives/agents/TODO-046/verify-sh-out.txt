@@ -1,0 +1,20 @@
+hook exit=0
+[翻訳on 英文] 記録まで 4.4 秒
+--- spoken.txt
+きょうは hook.py のバグを修正しました（TODOゼロヨンロク）。パッチは次の通りです。 コード省略。 テストを実行して、通るかどうかを教えてください。
+
+hook exit=0
+[翻訳on 日本語] 記録まで 0.0 秒
+--- spoken.txt
+設定ファイルを修正しました。テストも通っています。
+
+hook exit=0
+[翻訳off 英文] 記録まで 0.0 秒
+--- spoken.txt
+Today I fixed the bug in hook.py (TODOゼロヨンロク). Here is the patch: コード省略。 Please run the tests and tell me if they pass.
+
+hook exit=0
+[翻訳on 偽claude失敗 英文] 記録まで 0.1 秒
+--- spoken.txt
+Today I fixed the bug in hook.py (TODOゼロヨンロク). Here is the patch: コード省略。 Please run the tests and tell me if they pass.
+

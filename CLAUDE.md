@@ -3,7 +3,7 @@
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 Claude Code の返答の冒頭を、手元の VOICEVOX で読み上げるフック。コマンドは
-`ccspk`（`hook`・`say`・`stop`・`status`・`summary`・`queue`・`test`・`dict` のサブコマンド。`cli.py` がまとめる）。
+`ccspk`（`hook`・`say`・`stop`・`status`・`summary`・`queue`・`translate`・`test`・`dict` のサブコマンド。`cli.py` がまとめる）。
 仕組みとテストは `docs/Developer.md`、インストールと辞書は `docs/UsersGuide.md` にある。
 
 ## コマンド
@@ -22,8 +22,11 @@ uv tool install .         # 利用者の環境へ入れる
   `ccspk test` を走らせ、通れば入れ直す。詳しくは `docs/Developer.md` の「4.4 入れ直し」
 - フックを手で動かすときは、本物の `$XDG_RUNTIME_DIR` と `$XDG_STATE_HOME` を使わない（読み上げが止まったままに
   なったり、鳴っている読み上げを止めたり、読み間違いの点検の記録に混ざったりする）。Stop として動かすと
-  裏で本物の `claude -p` が走り、料金がかかる。要約（`ccspk summary`）が入っていれば、どのイベントでも長い文で走る。手順は `docs/Developer.md` の「4.2 フックを手で動かす」
+  裏で本物の `claude -p` が走り、料金がかかる。要約（`ccspk summary`）が入っていれば、どのイベントでも長い文で走る。翻訳（`ccspk translate`）が入っていれば英文で走る。手順は `docs/Developer.md` の「4.2 フックを手で動かす」
 - 辞書はリポジトリに置かない。`dict add`・`remove`・`import` が `~/.config/ccspk/user_dict.json` へ
   書き出し、エンジンの起動時に読み込む（`docs/UsersGuide.md` の「2.1 辞書のファイル」）。
   試すときは `XDG_CONFIG_HOME` を一時ディレクトリに向ける
+- `feat` か `fix` のコミットをしたら、そのコミットに注釈なしのタグを付ける。`ccspk --version` の版は `hatch-vcs` が
+  タグから決める。版は直前のタグ（`git describe --tags --abbrev=0`）から、`feat` なら minor（v1.3.0 → v1.4.0）、
+  `fix` なら patch（v1.3.0 → v1.3.1）を上げる。`docs`・`chore` などには付けない。タグの push も利用者が行う
 - `~/.claude` から分ける前のコミットメッセージにある TODO の番号は旧番号（`docs/Developer.md` の「5. TODO の番号」）

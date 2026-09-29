@@ -1,7 +1,7 @@
 # 開発者向け
 
 依存は click、loguru、sudachipy と sudachidict_core（自動の点検で単語を切り出す）、VOICEVOX のエンジン
-（`127.0.0.1:50021`）、`pw-play`、`claude`（自動の点検で読みを判定させる。要約を入れたときは長い返答の要約にも使う）。
+（`127.0.0.1:50021`）、`pw-play`、`claude`（自動の点検で読みを判定させる。要約・翻訳を入れたときは長い返答の要約と英文の翻訳にも使う）。
 読み上げの範囲や切り方など、利用者から見た動きは下の「2. 動き方」、インストールと辞書は
 [UsersGuide](UsersGuide.md) にある。
 
@@ -13,7 +13,7 @@
 |---|---|
 | `pyproject.toml` | コマンド `ccspk` の定義（`uv tool install` で入れる） |
 | `src/ccspk/cli.py` | サブコマンドをまとめる。`ccspk test` もここにある |
-| `src/ccspk/hook.py` | `ccspk hook`・`say`・`stop`・`status`・`summary`・`queue`。Stop・MessageDisplay・PreToolUse フックとして、返答の冒頭と質問の文を VOICEVOX で読み上げる |
+| `src/ccspk/hook.py` | `ccspk hook`・`say`・`stop`・`status`・`summary`・`queue`・`translate`。Stop・MessageDisplay・PreToolUse フックとして、返答の冒頭と質問の文を VOICEVOX で読み上げる |
 | `src/ccspk/user_dict.py` | `ccspk dict`。VOICEVOX のユーザー辞書を操作する |
 | `src/ccspk/check.py` | 読み間違いの自動の点検（`python -m ccspk.check`）。フックが読み上げた文を記録し、Stop で裏で起こす（[「3.8 自動の点検」](#38-自動の点検)） |
 | `src/ccspk/__init__.py` | `__version__`（`--version` で出す版） |
@@ -33,8 +33,15 @@
   折り返した続きと見て前の行につなぐ（空行の後と、入れ子の箇条書きは除く）。空行と、句読点・「：」・英語のピリオドで終わる行
   （「（済んだ。）」のように閉じ括弧が後ろに付いても）には補わない
 - 要約を入れたとき（`ccspk summary on`、または `CCSPK_SUMMARY=1`）は、整えた文が 180 字を超えたら、
-  切らずに `claude -p --model sonnet` で要約させ、要約を整えて上と同じく切ってから読む。イベントは問わない。
+  整える前の返答を `claude -p --model sonnet` で要約させ、要約を整えて上と同じく切ってから読む。イベントは問わない。
   最初の音が要約の分（5〜6 秒）遅れる。要約に失敗したら、知らせずに切った文を読む
+- 翻訳を入れたとき（`ccspk translate on`）は、整える前の返答のうちコードブロックの外に、ひらがな・カタカナ・漢字が
+  1 字も無ければ英文とみなし、整える前の返答（コードブロックは中身を空にする）の先頭 540 字までを `claude -p --model sonnet` で日本語に訳させ、訳を整えて
+  上と同じく切ってから読む。イベントも字数も問わないので、英語で作業すると途中の文章や質問のたびに料金がかかる。
+  整えた後の文で見分けないのは、`tidy()` が足す「コード省略」「から」「TODOゼロヨンロク」などで日本語に見えてしまうため。
+  要約もする長い英文は、要約で日本語にするので訳さない（`claude -p` は 1 回）。訳に失敗したら、知らせずに切った英文を読む
+- 要約と翻訳では、今日・辛い・行った・方のように文脈で読みが分かれる単語をひらがなだけで書かせる（漢字の後に括弧で読みを添えさせない。添えると二重に読むため）。
+  エンジンは文脈を見ずに読みを当てるため。全部をひらがなにはさせない（エンジンが単語の切れ目を推定できず、抑揚が平板になる）
 - 読み間違いを減らすため、辞書で直せないもの（記号や数字など）は置き換え、単語の読みはエンジンの辞書で直す。どちらも
   [UsersGuide.md](UsersGuide.md#2-読み上げの辞書) にある
 - 文ごとに合成し、1 文目ができたらすぐ鳴らす。2 文目以降は鳴らしている
@@ -90,6 +97,7 @@ MessageDisplay フックとして、`AskUserQuestion` を呼ぶ直前に PreTool
 | `status [--clear]` | `UNUSABLE` があれば理由を表示する。`--clear` なら消す |
 | `summary [on\|off]` | `SUMMARY` を作る・消す。その後で `summary_on()` の結果を `on`・`off` で表示し、`CCSPK_SUMMARY` が決めていればそのことを添える |
 | `queue [on\|off]` | `QUEUE` を作る・消す（`switch()`。`summary` と共通）。その後で `QUEUE` があるかを `on`・`off` で表示する |
+| `translate [on\|off]` | `TRANSLATE` を作る・消す（`switch()`）。その後で `TRANSLATE` があるかを `on`・`off` で表示する |
 
 `hook.py` の `main()`（`ccspk hook`）は、フックとして次の順に進む。
 どこかで条件を満たさなければ、そこで終わる。
@@ -103,14 +111,18 @@ MessageDisplay フックとして、`AskUserQuestion` を呼ぶ直前に PreTool
    そろっていなければ終わる。そろったらつなぎ、置いた分を消す。`PARTS_KEEP` 秒より古い分もここで消す。
    PreToolUse なら、`questions()` で質問の文を改行でつなぐ。`tool_name` が
    `AskUserQuestion` でなければ空にする
-7. `prepare()` で読み上げる文に整える。`tidy()` で整えた文が `LIMIT` を超え、`summary_on()` が真なら、
-   その文を先頭 `SUMMARY_MAX` 字まで切り、要約させる印を付けて渡す。それ以外は `clip()` で切る（`to_speech()` と同じ）。
+7. `prepare()` で、整えた文・印・子プロセスに渡す本文の 3 つを作る。`tidy()` で整えた文が `LIMIT` を超え、`summary_on()` が
+   真なら、整える前の返答（NUL は消す）を先頭 `SUMMARY_MAX` 字まで切って本文にし、要約させる印（`SUMMARIZE`）を付ける。
+   そうでなく、`english()` が真（整える前の返答のコードブロックの外に、ひらがな・カタカナ・漢字が無い）で `TRANSLATE` が
+   あれば、整える前の返答のコードブロックの中身を空にし（長いコードで後ろの説明がはみ出さないように）、先頭 `TRANSLATE_MAX` 字まで切って本文にし、訳させる印（`TRANSLATING`）を付ける。
+   書き直させるときの整えた文は先頭 `SUMMARY_MAX` 字まで。それ以外は整えた文を `clip()` で切り（`to_speech()` と同じ）、本文も同じ。
+   整えた文は、下の空かどうかと `LAST` との比べに使う（MessageDisplay と Stop で届く返答は、空白などが違うことがある）。
    MessageDisplay・PreToolUse で空になったら終わる
-8. 整えた文（要約させるなら要約の前の文）が `LAST`（最後に読んだ文）と同じで、書いてから `SAME_WITHIN` 秒のうちなら終わる
+8. 整えた文が `LAST`（最後に読んだ文）と同じで、書いてから `SAME_WITHIN` 秒のうちなら終わる
 9. `stop_playing()` で前の再生を止める。`QUEUE` があって文が空でなければ止めない
-10. 文が空でなければ、`LAST` に書き、`speak()` で子プロセスを起こし、その PID を `PIDFILE` に書く。
+10. 文が空でなければ、`LAST` に書き、`speak()` で本文を渡して子プロセスを起こし、その PID を `PIDFILE` に書く。
     `QUEUE` があれば、`PIDFILE` にある動いている子プロセスの後ろに足す（下の「3.2 子プロセス」）。
-    要約させないときは、`check.record()` で文を記録する（[「3.8 自動の点検」](#38-自動の点検)）
+    要約・翻訳させないときは、`check.record()` で文を記録する（[「3.8 自動の点検」](#38-自動の点検)）
 
 フックはここで終わり、Claude Code を待たせない（登録の `timeout` は 5 秒）。
 合成と再生は子プロセスが受け持つ。
@@ -123,31 +135,34 @@ MessageDisplay フックとして、`AskUserQuestion` を呼ぶ直前に PreTool
 `start_new_session=True` で新しいセッション（兼プロセスグループ）にするので、
 子プロセスが起こした `pw-play` まで、グループごと止められる。
 
-要約させるときは `python -P -m ccspk.hook --play --summarize <本文>` で起こし（`SUMMARIZE`）、
-子プロセスは `play_summary()` で次の順に進む。
+要約させるときは `python -P -m ccspk.hook --play --summarize <本文>`（`SUMMARIZE`）、訳させるときは
+`--summarize` の代わりに `--translate`（`TRANSLATING`）を付けて起こし、子プロセスは `play_rewritten()` で次の順に進む。
+印ごとの指示は `PROMPTS` にある（要約は `SUMMARY_PROMPT`、翻訳は `TRANSLATE_PROMPT`）。
 
-1. `summarize()` で、`claude -p --model sonnet --setting-sources "" --tools "" --no-session-persistence SUMMARY_PROMPT` の
+1. `rewrite()` で、`claude -p --model sonnet --setting-sources "" --tools "" --no-session-persistence <指示>` の
    標準入力に、本文を `<reply>` と `</reply>` の行で囲んで渡す。囲まないと指示と返答の境目が無く、英語の返答を
    要約する文と受け取らず「返答が含まれていない」と答えることがあった（終了コードは 0 なので失敗と見分けられない）。
-   本文は `tidy()` を通っていて `>` が無いので、中に `</reply>` は現れない。
+   本文は整える前の返答なので、囲みが崩れないよう、中の `</reply>` は `unwrap()` で消してから渡す。
+   整えてから渡さないのは、コードブロックが「コード省略」になるなど、返答の形が崩れて英文と日本語が混ざるため。
    `cwd` は `STATE`（`user_dict.py`）、環境変数は `CCSPK_SPEAK=0` を足す。
    `claude -p` は同じプロセスグループにいるので、`stop_playing()` で一緒に止まる
-2. 終了コードが 0 なら、出力を `to_speech()` で整えて切る（要約は `LIMIT` を少し超えることがある）。
+2. 終了コードが 0 なら、出力を `to_speech()` で整えて切る（要約は `LIMIT` を少し超えることがある。訳は長い英文なら超える）。
    `SUMMARY_TIMEOUT` 秒で終わらない、終了コードが 0 でない、整えると空、起こせない（`OSError`）のどれかなら、
-   本文を `clip()` で切る。失敗は知らせない
+   本文を `to_speech()` で整えて切る。失敗は知らせない
 3. hook の `LOCK` を取り、読む文を `check.record()` で記録する
 4. 前の子プロセスを待たせる印（下の `--after=`）があれば、`wait_for()` で待つ
 5. `play()` で鳴らす
 
 順番に読むモード（`QUEUE` がある）では、`speak()` は `PIDFILE` の子プロセスのうち動いているもの（`playing()`）を
 止めずに残し、最後のものを `os.pidfd_open()` で開いて、その pidfd を `--after=<fd>` と `pass_fds` で新しい子プロセスに渡す
-（`python -P -m ccspk.hook --play --after=<fd> [--summarize] <本文>`）。子プロセスは要約を済ませてから、鳴らす直前に
+（`python -P -m ccspk.hook --play --after=<fd> [--summarize|--translate] <本文>`）。子プロセスは要約・翻訳を済ませてから、鳴らす直前に
 `wait_for()` で pidfd を `select()` し、前の子プロセスが終わるのを待つ。前の子プロセスもその前を待つので、来た順に鳴る。
 PID で待たずに pidfd で待つのは、前の子プロセスが終わって番号が使い回されても、関係の無いプロセスを待たないため。
 開いた後で `ours()` で確かめ、開く前に終わっていたら待たせない。`PIDFILE` には、残した PID と新しい PID を 1 行に 1 つ、
 起こした順に書く。`os.pidfd_open()` が要るので、Python は 3.14 以上にしている（`uv` の 3.13 には無かった）。
 
-`SUMMARY_PROMPT` の字数は `LIMIT` から作る。要約の切り替えは `summary_on()` が決める。
+`SUMMARY_PROMPT` の字数は `LIMIT` から作る。読みが分かれる単語をひらがなで書かせる指示（`KANA_NOTE`）は、
+`SUMMARY_PROMPT` と `TRANSLATE_PROMPT` の両方の終わりに付ける。翻訳の切り替えは `TRANSLATE` があるかだけで決まる。要約の切り替えは `summary_on()` が決める。
 環境変数 `CCSPK_SUMMARY` が `1` なら真、`0` なら偽（`summary_env()`）、ほかの値や無いときは `SUMMARY` があるか。
 
 `play()` は、合成するスレッドと鳴らすループに分かれる。
@@ -205,7 +220,8 @@ PID で待たずに pidfd で待つのは、前の子プロセスが終わって
 | `tidy()` | コードブロックを「コード省略」に置き換え、Markdown の記号・表・URL を除き、`drop_commit_ids()` でコミット ID を消し、記号と数字の読みを整え、`end_lines()` で行の終わりに「。」を補う。字下げした行は、箇条書きの記号を消した直後に `mark_wrapped()` で印を付けておく |
 | `mark_wrapped()` | 字下げした行の頭に、前の行につなぐ印（`WRAP`）を付ける。`_` や URL を消すと行頭に空白が残るので、その前に呼ぶ。つなぐのは `end_lines()`（先につなぐと、`drop_commit_ids()` が文ごと消すときに前の行まで消す） |
 | `end_lines()` | 印の付いた行を前の行につなぎ、次に行が続く行の終わりに「。」を補う |
-| `prepare()` | フックが子プロセスに渡す文と、要約させるかを返す。要約させるときは `clip()` を通さず、`SUMMARY_MAX` 字までにする |
+| `english()` | 整える前の返答から、コードブロック（`FENCE`）を除いて、ひらがな・カタカナ・漢字が 1 字も無ければ英文とみなす。空白だけなら偽 |
+| `prepare()` | 整えた文・要約か翻訳させる印・子プロセスに渡す本文を返す。書き直させるときの本文は、整える前の返答を要約なら `SUMMARY_MAX` 字まで、翻訳ならコードブロックの中身を空にして `TRANSLATE_MAX` 字まで |
 | `drop_commit_ids()` | `` ` `` で囲んだコミット ID を消す。消すと文が壊れるものは残す |
 | `clip()` | `LIMIT` 字を超えるときに、文の途中で切らないように縮める |
 | `sentences()` | 文末（`ENDS`）の後ろで文に分ける |
@@ -228,6 +244,7 @@ PID で待たずに pidfd で待つのは、前の子プロセスが終わって
 | `ENGINE` | `http://127.0.0.1:50021` | エンジンの URL |
 | `PLAY` | `--play` | 子プロセスの目印。`stop_playing()` は `MODULE` と合わせて見分ける |
 | `MODULE` | `ccspk.hook` | 子プロセスが `python -m` で起こすモジュール。`stop_playing()` の目印にもなる |
+| `FENCE` | 正規表現 | コードブロック（閉じていなければ末尾まで）。`tidy()` と `english()` で使う |
 | `CUT` | 正規表現 | 1・2 文目を切る区切り |
 | `CUT_MIN` | 8 | これより手前では切らない |
 | `SPACE_WITHIN` | 30 | この字数までに `CUT` が無いときだけ、スペースで切る |
@@ -235,10 +252,16 @@ PID で待たずに pidfd で待つのは、前の子プロセスが終わって
 | `SUMMARIZE` | `--summarize` | `PLAY` の後ろに付けると、子プロセスが要約してから読む |
 | `SUMMARY` | `~/.config/ccspk/summary` | あれば要約が入。`user_dict.DICT_FILE` と同じディレクトリ（`$XDG_CONFIG_HOME` に従う） |
 | `QUEUE` | `~/.config/ccspk/queue` | あれば順番に読むモード。`SUMMARY` と同じディレクトリ |
+| `TRANSLATE` | `~/.config/ccspk/translate` | あれば英文を訳して読む。`SUMMARY` と同じディレクトリ |
+| `TRANSLATING` | `--translate` | `PLAY` の後ろに付けると、子プロセスが訳してから読む |
+| `TRANSLATE_MAX` | 540（`LIMIT` の 3 倍） | 訳に回すのは先頭のこの字数まで。英文は訳すと字数が 3 分の 1 ほどになるので、訳した後で `LIMIT` 字ほどになるように |
 | `AFTER` | `--after=` | `PLAY` の後ろに `--after=<fd>` と付けると、子プロセスは鳴らす前に、その pidfd の子プロセスが終わるのを待つ |
-| `SUMMARY_TIMEOUT` | 30 | 要約の `claude -p` を待つ秒数 |
+| `SUMMARY_TIMEOUT` | 30 | 要約・翻訳の `claude -p` を待つ秒数 |
 | `SUMMARY_MAX` | 20000 | 要約に回すのは先頭のこの字数まで。本文は argv 1 つで渡すので、上限（131,072 バイト、日本語でおよそ 43,000 字）を超えると子プロセスを起こせない。`claude -p` に渡す量も抑える |
+| `KANA_NOTE` | 文 | 文脈で読みが分かれる単語をひらがなで書かせる指示。下の 2 つの終わりに付ける |
 | `SUMMARY_PROMPT` | 文 | 要約の `claude -p` に渡す指示 |
+| `TRANSLATE_PROMPT` | 文 | 翻訳の `claude -p` に渡す指示 |
+| `PROMPTS` | 辞書 | 子プロセスの印（`SUMMARIZE`・`TRANSLATING`）から、`claude -p` に渡す指示を引く |
 | `PARTS_KEEP` | 600 | そろわないまま残った MessageDisplay の分は、この秒数で消す |
 | `SAME_WITHIN` | 5 | 読んでからこの秒数のうちに同じ文が来たら読まない。長くすると、続けて同じ返答（「はい。」など）が来たときに黙ってしまう |
 
@@ -251,7 +274,7 @@ sudachipy は読まない（最初の音を遅らせない）。
 
 - `record()` — `speak()` の後で、鳴らす文（`to_speech()` の結果）を `SPOKEN` に追記する。
   イベントは問わない。フックの `LOCK` を取ったまま呼ぶので、切り詰めがほかのフックとぶつからない。
-  要約させるときはフックでは呼ばず、再生の子プロセスが要約の後で、`LOCK` を取って読む文（要約、失敗したら切った文）を
+  要約・翻訳させるときはフックでは呼ばず、再生の子プロセスが要約・翻訳の後で、`LOCK` を取って読む文（要約・訳、失敗したら切った文）を
   記録する（[「3.2 子プロセス」](#32-子プロセス)）。記録は Stop より後になるので、点検は次の Stop に回る
 - `after_stop()` — Stop のとき（`MessageDisplay` でも `PreToolUse` でもない）、`LOCK` を放した後で呼ぶ。
   同じ文を 2 度読まないで返るときも呼ぶ（`MessageDisplay` が記録した分があるため）。
@@ -314,8 +337,8 @@ sudachipy は読まない（最初の音を遅らせない）。
 
 hook の `demo()` は、整形と分割（`to_speech`、`drop_commit_ids`、`clip`、`sentences`、`split_first`、
 `chunks`、`squeeze`）、PreToolUse の質問の文を取り出す `questions()`、MessageDisplay の分をつなぐ
-`assemble()`（一時ディレクトリで）、要約の切り替え（`summary_on`）と要約させるかの分かれ目（`prepare`）、
-子プロセスの振り分け（`child_args`・`run_child`。`--after=` の pidfd のプロセスが終わるまで鳴らさないことも）、子プロセスを全部止める `stop_playing()`（偽の子プロセスで。使い回された番号は触らない）と `playing()`、`switch()`、要約（`summarize`。`PATH` の先頭に置いた偽の `claude` で、失敗・空・時間切れも。
+`assemble()`（一時ディレクトリで）、要約の切り替え（`summary_on`）、英文の見分け（`english`）、要約・翻訳させるかの分かれ目（`prepare`）、
+子プロセスの振り分け（`child_args`・`run_child`。`--after=` の pidfd のプロセスが終わるまで鳴らさないことも）、子プロセスを全部止める `stop_playing()`（偽の子プロセスで。使い回された番号は触らない）と `playing()`、`switch()`、要約と翻訳（`rewrite`。`PATH` の先頭に置いた偽の `claude` で、渡す指示、失敗・空・時間切れも。
 `claude` が無い例は `PATH` を一時ディレクトリだけにし、本物を起こさない）を `assert` で確かめている（pytest ではない）。
 dict の `demo()` は、アクセントの位置の決め方（`accent_of`）と、全角から半角へ戻す `halfwidth` を確かめている。
 check の `demo()` は、単語の切り出し（`extract`）、`claude` の返答の読み取り（`parse`）、点検を起こす条件
@@ -343,9 +366,9 @@ uv run ccspk test   # hook・dict・check の demo() を全部
 一時ディレクトリに向ける。Stop として渡すと、裏で点検が起こり本物の `claude -p` を呼ぶ（料金がかかる）。
 避けるなら、`PATH` の先頭に決まった行を返すだけの偽の `claude` を置く。
 要約が入っていると（`ccspk summary`）、180 字を超える文でも本物の `claude -p` を呼ぶ。
-`CCSPK_SUMMARY=0` を付けるか、同じく偽の `claude` を置く。
+`CCSPK_SUMMARY=0` を付けるか、同じく偽の `claude` を置く。翻訳が入っていると（`ccspk translate`）、英文でも本物を呼ぶ。
 順番に読むモード（`ccspk queue`）は `~/.config/ccspk/queue` があるかで決まるので、利用者が入れているかで動きが変わる。
-`XDG_CONFIG_HOME` も一時ディレクトリに向け、試すなら `$tmp/ccspk/queue` を置く。
+`XDG_CONFIG_HOME` も一時ディレクトリに向け、試すなら `$tmp/ccspk/queue`・`$tmp/ccspk/translate` を置く。
 
 ```sh
 tmp=$(mktemp -d)

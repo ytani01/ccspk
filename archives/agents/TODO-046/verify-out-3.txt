@@ -1,0 +1,34 @@
+=== TRANSLATE 本文 (子プロセスに渡す) ===
+Today I made the fix. It was a painful bug, and the config took a hard look to track down.
+Yesterday I went to the other machine and conducted the same check there. The way you set the timeout was the cause,
+and the person who wrote it confirmed the setting. Please decide the scope of the change and the way to proceed.
+
+Here is the patch for `src/ccspk/hook.py` (TODO-046):
+```
+```
+
+| file | result |
+|------|--------|
+| hook.py | fixed |
+| cli.py | unchanged |
+
+After that, run `uv run ccspk test` and confirm that `load_config` works wi
+=== end ===
+
+### SUMMARY run 1
+きょう設定ファイルを修正し、テストを実行したところ、12件中10件が通りました。残りの2件は環境の設定が原因のようです。修正はすでに済んでいて、確認だけが残っています。あなたが決めることは、修正の範囲と、確認をきょう行うかあしたおこなうかです。どちらで進めるか教えてください。
+
+### SUMMARY run 2
+きょう設定ファイルを修正し、テストを実行したところ、12件中10件が通りました。残る2件は環境の設定が原因のようで、まだ通っていません。設定の修正は済んでいて、確認だけが残っています。修正の範囲と、確認をきょう行うかあした行うかを決めて、どちらで進めるか教えてください。
+
+### SUMMARY run 3
+設定ファイルを修正し、テストを実行したところ、12件のうち10件が通りました。残りの2件は、環境の設定が原因で失敗しているようです。修正はすでに済んでいて、確認だけが残っています。あなたに決めてほしいのは、修正の範囲と、確認をきょう行うかあした行うかです。どちらで進めるか教えてください。
+
+### TRANSLATE run 1
+きょう、修正を行いました。つらいバグで、設定を突き止めるのにかなり苦労しました。 きのう、べつのマシンに行って、そこでも同じ確認を行いました。原因は timeout の設定のしかたでした。書いたかたも、その設定を確認しています。変更の範囲と進めかたを決めてください。 こちらが src/ccspk/hook.py のパッチです（TODOゼロヨンロク）。 コード省略。
+
+### TRANSLATE run 2
+きょうは修正を行いました。つらいバグで、設定ファイルの原因を突き止めるのに苦労しました。 きのう、別のマシンにいって、そこでも同じ確認をおこないました。原因は、タイムアウトの設定のしかたでした。そして、それを書いた人が、その設定を確認してくれました。変更の範囲と、進めかたを決めてください。 こちらが src/ccspk/hook.py のパッチです。TODOゼロヨンロクです。
+
+### TRANSLATE run 3
+きょう、修正を行いました。つらいバグで、設定ファイルを突き止めるのにかなり時間がかかりました。 きのう、もう一台のマシンに行って、そこでも同じ確認を行いました。原因は timeout の設定のしかたでした。書いたひとも、その設定を確認しています。変更の範囲と進めかたを決めてください。 src/ccspk/hook.py のパッチです。TODOゼロヨンロクです。

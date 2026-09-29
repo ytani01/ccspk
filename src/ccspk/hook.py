@@ -4,7 +4,7 @@ Stop では最後の返答を、MessageDisplay ではツールを呼ぶ前など
 PreToolUse（AskUserQuestion）では質問の文を読む。
 環境変数 CCSPK_SPEAK が 1 のときだけ鳴らす。
 要約が入っていて（ccspk summary）、整えた文が LIMIT を超えるときは、再生の子プロセスが
-claude -p で要約してから読む。
+claude -p で要約してから読む。翻訳が入っていて（ccspk translate）、整えた文が英文なら、日本語に訳してから読む。
 再生中に次の返答が来たら、前の再生を止めてから読む。順番に読むモード（ccspk queue）なら、止めずに来た順に読む。
 pw-play が無い、エンジンに接続できない、PipeWire が動いていない、のどれかなら
 鳴らさずに終わり、理由を UNUSABLE に書いて覚える。ファイルがあるあいだは確かめもせずに終わる。
@@ -72,17 +72,38 @@ SUMMARY = DICT_FILE.parent / "summary"
 SUMMARIZE = "--summarize"  # PLAY の後ろに付けると、子プロセスが要約してから読む
 # あれば前の再生を止めずに、来た順に読む（ccspk queue on で作る）
 QUEUE = DICT_FILE.parent / "queue"
+# あれば英文を日本語に訳して読む（ccspk translate on で作る）
+TRANSLATE = DICT_FILE.parent / "translate"
+TRANSLATING = "--translate"  # PLAY の後ろに付けると、子プロセスが訳してから読む
+# 訳に回すのは先頭のこの字数まで。英文は訳すと字数が 3 分の 1 ほどになるので、訳した後で LIMIT 字ほどになるよう
+TRANSLATE_MAX = LIMIT * 3
 AFTER = "--after="  # PLAY の後ろに付けると、子プロセスは鳴らす前に、この pidfd の前の子プロセスが終わるのを待つ
-SUMMARY_TIMEOUT = 30  # 要約の claude -p を待つ秒数。Sonnet で 5〜6 秒だった
+SUMMARY_TIMEOUT = 30  # 要約・翻訳の claude -p を待つ秒数。要約は Sonnet で 5〜6 秒だった
 # 要約に回すのは先頭のこの字数まで。本文は子プロセスの argv 1 つで渡すので、上限（131,072 バイト。
 # 日本語でおよそ 43,000 字）を超えると起こせない。claude -p に渡す量（料金と時間）も抑える
 SUMMARY_MAX = 20000
 WRAP = "\0"  # mark_wrapped() が、前の行につなぐ行の頭に付ける印
-SUMMARY_PROMPT = f"""<reply> と </reply> の間の文は、ソフトウェア開発を手伝う AI アシスタントの返答を、読み上げ用に整えたものです。
-耳で聞いて分かるよう、{LIMIT} 字以内の日本語に要約してください。
-結論、利用者に頼んでいること、利用者が決めることを優先し、細かい経緯・ファイル名・コマンドは省いてください。
+FENCE = re.compile(r"^\s*(```|~~~).*?(?:^\s*\1|\Z)", re.S | re.M)  # コードブロック。閉じていないブロックは末尾まで
+# 読み上げのエンジンは文脈を見ずに読みを当てるので、読みが分かれる単語だけひらがなで書かせる。
+# 全部ひらがなにすると、エンジンが単語の切れ目を推定できず、抑揚が平板になる
+# 例に読みを括弧で添えると、出力でも「今日（きょう）」と添えて二重に読ませるので、例は矢印で書く
+# 読みを 1 つだけ挙げると、意味が違っても当てはめる（行く意味の「行って」を「おこなって」と書いた）ので、両方挙げる
+KANA_NOTE = """今日・辛い・行った・方のように、文脈で読みが分かれる単語は、意味に合う読みをひらがなだけで書いてください。
+例: 今日→きょう か こんにち、辛い→つらい か からい、行った→いった（行く）か おこなった（行う）、方→かた か ほう。
+漢字の後に括弧で読みを添えないでください。読みが 1 つに決まる単語は漢字のまま書いてください。"""
+SUMMARY_PROMPT = f"""<reply> と </reply> の間の文は、ソフトウェア開発を手伝う AI アシスタントの返答です（Markdown で書かれています）。
+読み上げるので、耳で聞いて分かるよう、{LIMIT} 字以内の日本語に要約してください。
+結論、利用者に頼んでいること、利用者が決めることを優先し、細かい経緯・ファイル名・コマンド・コードは省いてください。
 頼んでいることや決めることが返答に無ければ、無いとは書かず、そのことに触れないでください。
-返答と同じ話し方（です・ます）で、要約だけを 1 段落で出してください。見出し・箇条書き・記号・前置きは不要です。"""
+返答と同じ話し方（です・ます）で、要約だけを 1 段落で出してください。見出し・箇条書き・記号・前置きは不要です。
+{KANA_NOTE}"""
+TRANSLATE_PROMPT = f"""<reply> と </reply> の間の英文は、ソフトウェア開発を手伝う AI アシスタントの返答です（Markdown で書かれています）。
+読み上げるので、耳で聞いて分かる自然な日本語に訳してください。話し方は「です・ます」にしてください。
+コマンド・ファイル名・識別子は訳さずそのまま残してください。コードブロックは「コード省略」とだけ書き、表は飛ばしてください。
+途中で切れている文は、切れたところまで訳してください。
+訳だけを出してください。見出し・箇条書き・記号・前置き・説明は不要です。
+{KANA_NOTE}"""
+PROMPTS = {SUMMARIZE: SUMMARY_PROMPT, TRANSLATING: TRANSLATE_PROMPT}  # 子プロセスの印と、claude -p に渡す指示
 
 _log = getLogger("hook")
 
@@ -121,7 +142,7 @@ def tidy(text):
     # NUL は子プロセスの argv に渡せず、WRAP とも見分けられないので最初に消す
     text = text.replace("\0", "")
     # コードブロックと表は中身を読まない。閉じていないブロックは末尾まで
-    text = re.sub(r"^\s*(```|~~~).*?(?:^\s*\1|\Z)", "コード省略。", text, flags=re.S | re.M)
+    text = FENCE.sub("コード省略。", text)
     text = re.sub(r"^\s*\|.*$", "", text, flags=re.M)
     # 行頭の Markdown の記号。引用の「>」は、字下げと見ないよう行頭の空白ごと消す
     text = re.sub(r"^[ \t]*(?:>[ \t]*)+", "", text, flags=re.M)
@@ -236,16 +257,33 @@ def summary_on():
     return SUMMARY.exists() if env is None else env
 
 
+def english(raw):
+    """整える前の返答から、コードブロックを除いて、ひらがな・カタカナ・漢字が 1 字も無ければ英文とみなす。
+    空白だけなら False。整えた後で見ると、tidy() が足す「コード省略」「から」などで日本語に見えてしまう。"""
+    text = FENCE.sub("", raw)
+    return bool(text.strip()) and not re.search(r"[\u3041-\u30ff\u4e00-\u9fff]", text)
+
+
 def prepare(raw):
-    """子プロセスに渡す文と、要約させるかを返す。要約するときは clip() の前の文を SUMMARY_MAX 字まで渡す。"""
+    """整えた文、claude -p に書き直させる印（SUMMARIZE・TRANSLATING。させないなら None）、子プロセスに渡す本文を返す。
+    整えた文は、空かどうかと LAST との比べに使う。書き直させないときは clip() した文で、本文も同じ。
+    書き直させるときは、整える前の返答を、要約なら SUMMARY_MAX 字まで、翻訳なら TRANSLATE_MAX 字まで渡す。
+    整えてから渡すと、コードブロックが「コード省略」になるなど、返答の形が崩れる。
+    翻訳ではコードブロックの中身を空にしてから切る。長いコードで、後ろの説明が TRANSLATE_MAX 字からはみ出さないように。
+    長い英文は要約で日本語にするので、訳してから要約する 2 回にはしない。"""
     text = tidy(raw)
+    raw = raw.replace("\0", "")  # NUL は子プロセスの argv に渡せない
     if len(text) > LIMIT and summary_on():
-        return text[:SUMMARY_MAX], True
-    return clip(text), False
+        return text[:SUMMARY_MAX], SUMMARIZE, raw[:SUMMARY_MAX]
+    if english(raw) and TRANSLATE.exists():
+        return text[:SUMMARY_MAX], TRANSLATING, FENCE.sub("```\n```", raw)[:TRANSLATE_MAX]
+    text = clip(text)
+    return text, None, text
 
 
-def summarize(text):
-    """claude -p で要約し、to_speech() を通して返す。失敗・時間切れ・空なら clip(text)。
+def rewrite(text, prompt=SUMMARY_PROMPT):
+    """整える前の返答 text を、claude -p で prompt のとおりに書き直させ（要約・翻訳）、to_speech() を通して返す。
+    失敗・時間切れ・空なら to_speech(text)。
 
     再生の子プロセスの中で呼ぶ。claude -p は同じプロセスグループにいるので、stop_playing() で一緒に止まる。
     """
@@ -253,10 +291,9 @@ def summarize(text):
         STATE.mkdir(parents=True, exist_ok=True)
         p = subprocess.run(
             ["claude", "-p", "--model", "sonnet", "--setting-sources", "", "--tools", "",
-             "--no-session-persistence", SUMMARY_PROMPT],
+             "--no-session-persistence", prompt],
             # 指示と返答の境目を示す。囲まないと、英語の返答を要約する文と受け取らないことがある（TODO-044）。
-            # text は tidy() を通っていて「>」が無いので、中に </reply> は現れない
-            input=f"<reply>\n{text}\n</reply>",
+            input=f"<reply>\n{unwrap(text)}\n</reply>",
             capture_output=True,
             check=False,
             text=True,
@@ -265,13 +302,20 @@ def summarize(text):
             env={**os.environ, "CCSPK_SPEAK": "0"},
         )
     except (OSError, subprocess.TimeoutExpired):
-        return clip(text)
-    return (to_speech(p.stdout) if p.returncode == 0 else "") or clip(text)
+        return to_speech(text)
+    return (to_speech(p.stdout) if p.returncode == 0 else "") or to_speech(text)
 
 
-def play_summary(text, after=None):
-    """子プロセスで、要約して記録し、前の子プロセスを待ってから鳴らす。要約は待つ前に済ませておく。"""
-    text = summarize(text)
+def unwrap(text):
+    """囲みが崩れないよう、text の中の </reply> を消す。消した後にできる分（</re</reply>ply>）も消す。"""
+    while "</reply>" in text:
+        text = text.replace("</reply>", "")
+    return text
+
+
+def play_rewritten(text, flag, after=None):
+    """子プロセスで、要約か翻訳（flag）をして記録し、前の子プロセスを待ってから鳴らす。書き直しは待つ前に済ませておく。"""
+    text = rewrite(text, PROMPTS[flag])
     try:
         lock = open(LOCK, "w")
         fcntl.flock(lock, fcntl.LOCK_EX)
@@ -434,26 +478,27 @@ def play(text):
         subprocess.run(["pw-play", "-"], input=wav, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
-def child_args(text, to_summarize, after=None):
-    """子プロセスの python -m MODULE の後ろに付ける引数。after は待つ前の子プロセスの pidfd。"""
-    return [PLAY, *([f"{AFTER}{after}"] if after is not None else []), *([SUMMARIZE] if to_summarize else []), text]
+def child_args(text, flag=None, after=None):
+    """子プロセスの python -m MODULE の後ろに付ける引数。flag は prepare() の印、after は待つ前の子プロセスの pidfd。"""
+    return [PLAY, *([f"{AFTER}{after}"] if after is not None else []), *([flag] if flag else []), text]
 
 
 def run_child(args):
-    """子プロセスで、child_args() の引数を見て、要約してから鳴らすか、そのまま鳴らすかを振り分ける。"""
+    """子プロセスで、child_args() の引数を見て、要約・翻訳してから鳴らすか、そのまま鳴らすかを振り分ける。"""
     if args[:1] != [PLAY] or len(args) < 2:
         return
     *flags, text = args[1:]
     after = next((int(f.removeprefix(AFTER)) for f in flags if f.startswith(AFTER)), None)
-    if SUMMARIZE in flags:
-        play_summary(text, after)
+    flag = next((f for f in flags if f in PROMPTS), None)
+    if flag:
+        play_rewritten(text, flag, after)
     else:
         wait_for(after)
         play(text)
 
 
-def speak(text, to_summarize=False, queued=False):
-    """合成と再生を子プロセスに投げ、その PID を PIDFILE に足す。to_summarize なら子プロセスが要約してから読む。
+def speak(text, flag=None, queued=False):
+    """合成と再生を子プロセスに投げ、その PID を PIDFILE に足す。flag（prepare() の印）があれば子プロセスが要約・翻訳してから読む。
     queued なら、前の子プロセスを止めずに残し、それが終わるまで新しい子プロセスを待たせる。"""
     before = playing() if queued else []
     try:
@@ -467,7 +512,7 @@ def speak(text, to_summarize=False, queued=False):
     try:
         p = subprocess.Popen(
             # -P: 作業ディレクトリを sys.path に入れない（そこに click.py などがあると、それを import してしまう）
-            [sys.executable, "-P", "-m", MODULE, *child_args(text, to_summarize, after)],
+            [sys.executable, "-P", "-m", MODULE, *child_args(text, flag, after)],
             start_new_session=True,
             stdin=subprocess.DEVNULL,
             stdout=subprocess.DEVNULL,
@@ -665,10 +710,10 @@ def demo():
     # 要約の切り替え。環境変数（1・0）がファイルより優先し、ほかの値は無いものとして扱う
     from unittest import mock  # demo でだけ使う
 
-    global SUMMARY, STATE, SUMMARY_TIMEOUT, play, play_summary
-    saved = SUMMARY, STATE, SUMMARY_TIMEOUT, play, play_summary
+    global SUMMARY, TRANSLATE, STATE, SUMMARY_TIMEOUT, play, play_rewritten
+    saved = SUMMARY, TRANSLATE, STATE, SUMMARY_TIMEOUT, play, play_rewritten
     tmp = Path(tempfile.mkdtemp())
-    SUMMARY, STATE = tmp / "config" / "summary", tmp / "state"
+    SUMMARY, TRANSLATE, STATE = tmp / "config" / "summary", tmp / "config" / "translate", tmp / "state"
     try:
         with mock.patch.dict(os.environ):
             for exists, env, want in (
@@ -682,40 +727,76 @@ def demo():
                 else:
                     os.environ["CCSPK_SUMMARY"] = env
                 assert summary_on() is want, (exists, env)
-            # 要約するのは、入っていて整えた文が LIMIT を超えるときだけ。そのときは clip() の前の文を渡す
+            # 要約するのは、入っていて整えた文が LIMIT を超えるときだけ。そのときは整える前の返答を渡す
             long = "- **" + a * (LIMIT + 1) + "**"
             os.environ["CCSPK_SUMMARY"] = "0"
-            assert prepare(a * LIMIT) == (a * LIMIT, False)
-            assert prepare(long) == (a * LIMIT, False)
+            assert prepare(a * LIMIT) == (a * LIMIT, None, a * LIMIT)
+            assert prepare(long) == (a * LIMIT, None, a * LIMIT)
             os.environ["CCSPK_SUMMARY"] = "1"
-            assert prepare(a * LIMIT) == (a * LIMIT, False)
-            assert prepare("**" + a * LIMIT + "**") == (a * LIMIT, False)  # 整えた後の字数で比べる
-            assert prepare(long) == (a * (LIMIT + 1), True)
-            assert prepare(a * (SUMMARY_MAX + 10)) == (a * SUMMARY_MAX, True)  # 渡すのは SUMMARY_MAX 字まで
-            assert prepare("") == ("", False)
-            # 子プロセスの振り分け。要約するときは play_summary、しないときは play に、同じ本文が届く
+            assert prepare(a * LIMIT) == (a * LIMIT, None, a * LIMIT)
+            assert prepare("**" + a * LIMIT + "**") == (a * LIMIT, None, a * LIMIT)  # 整えた後の字数で比べる
+            assert prepare(long) == (a * (LIMIT + 1), SUMMARIZE, long)
+            assert prepare("\0" + long)[2] == long  # NUL は消す
+            assert prepare(a * (SUMMARY_MAX + 10)) == (a * SUMMARY_MAX, SUMMARIZE, a * SUMMARY_MAX)  # SUMMARY_MAX 字まで
+            assert prepare("") == ("", None, "")
+            # 英文の見分け。整える前の返答で、コードブロックを除いて、かな・漢字が 1 字でもあれば日本語
+            assert english("Fixed the bug in `foo.py`. 3 tests pass!") and english("ＯＫ、１２３")
+            assert english("Fixed:\n```py\nx = 'あ'\n```\nUpdated TODO-046, 3 → 5, 1~3.")  # tidy() なら日本語が入る
+            assert not english("reviewer の指摘") and not english("ヴ") and not english("漢")
+            assert not english("") and not english(" \n") and not english("```\nonly code\n```")
+            # 訳すのは、翻訳が入っていて英文のとき。長い英文は要約が入っていれば要約の 1 回だけ
+            en = "Done. " * 100  # 整えると 599 字
+            mixed = "Fixed it:\n```\nx\n```\nSee TODO-046."
+            code = "Fix:\n```\n" + "x = 1\n" * 200 + "```\nThis changes the retry logic."
+            os.environ["CCSPK_SUMMARY"] = "0"
+            assert prepare("Done.") == ("Done.", None, "Done.")  # 翻訳が切れていれば訳さない
+            TRANSLATE.touch()
+            assert prepare("**Done.**") == ("Done.", TRANSLATING, "**Done.**")
+            assert prepare(en) == (en.strip(), TRANSLATING, en[:TRANSLATE_MAX])  # 渡すのは TRANSLATE_MAX 字まで
+            assert prepare(mixed)[1:] == (TRANSLATING, "Fixed it:\n```\n```\nSee TODO-046.")  # コードの中身は渡さない
+            assert prepare(code)[2] == "Fix:\n```\n```\nThis changes the retry logic."  # 長いコードでも後ろの説明を渡す
+            assert to_speech(prepare(code)[2]) == "Fix: コード省略。 This changes the retry logic."  # 訳に失敗したとき
+            assert prepare("済んだ。 Done.") == ("済んだ。 Done.", None, "済んだ。 Done.")
+            assert prepare("```\nonly code\n```") == ("コード省略。", None, "コード省略。")
+            assert prepare("") == ("", None, "")
+            os.environ["CCSPK_SUMMARY"] = "1"
+            assert prepare("Done.")[1:] == (TRANSLATING, "Done.")
+            assert prepare(en) == (en.strip(), SUMMARIZE, en)
+            TRANSLATE.unlink()
+            # 子プロセスは印に合った指示で書き直し、書き直した文を記録して鳴らす
+            played = []
+            me = sys.modules[__name__]
+            with mock.patch.object(me, "rewrite", lambda t, pr: f"{t}:{pr[:40]}"), \
+                 mock.patch.object(me, "LOCK", tmp / "lock"), \
+                 mock.patch.object(check, "record", played.append), mock.patch.object(me, "play", played.append):
+                for flag, prompt in ((SUMMARIZE, SUMMARY_PROMPT), (TRANSLATING, TRANSLATE_PROMPT)):
+                    played.clear()
+                    play_rewritten("本文", flag)
+                    assert played == [f"本文:{prompt[:40]}"] * 2, (flag, played)
+            # 子プロセスの振り分け。要約・翻訳するときは play_rewritten、しないときは play に、同じ本文が届く
             calls = []
-            play, play_summary = (lambda t: calls.append(("play", t))), (lambda t, a: calls.append(("summary", t, a)))
-            for text, flag in (("本文。", True), ("本文。", False), (SUMMARIZE, False), (AFTER + "3", False)):
+            play, play_rewritten = (lambda t: calls.append(("play", t))), (lambda t, f, a: calls.append((f, t, a)))
+            for text, flag in (("本文。", SUMMARIZE), ("本文。", TRANSLATING), ("本文。", None), (SUMMARIZE, None),
+                               (TRANSLATING, None), (AFTER + "3", None)):
                 run_child(child_args(text, flag))
-            run_child(child_args("本文。", True, 7))
+            run_child(child_args("本文。", TRANSLATING, 7))
             assert [c[:2] for c in calls] == [
-                ("summary", "本文。"), ("play", "本文。"), ("play", SUMMARIZE), ("play", AFTER + "3"), ("summary", "本文。")
+                (SUMMARIZE, "本文。"), (TRANSLATING, "本文。"), ("play", "本文。"), ("play", SUMMARIZE),
+                ("play", TRANSLATING), ("play", AFTER + "3"), (TRANSLATING, "本文。")
             ], calls
             assert calls[0][2] is None and calls[-1][2] == 7
             # 順番に読むモード。前の子プロセスが終わるまで鳴らさない
             sleeper = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(0.5)"])
             calls.clear()
-            run_child(child_args("後。", False, os.pidfd_open(sleeper.pid)))
+            run_child(child_args("後。", None, os.pidfd_open(sleeper.pid)))
             assert sleeper.poll() is not None and calls[0][:2] == ("play", "後。"), calls
-            play, play_summary = saved[3:]
-            # 要約は偽の claude で。返した文は to_speech() を通す。失敗・空・時間切れは clip() した文
+            play, play_rewritten = saved[4:]
+            # 要約は偽の claude で。返した文は to_speech() を通す。失敗・空・時間切れは元の文を to_speech() した文
             fake = tmp / "claude"
             path = os.environ["PATH"]
             os.environ["PATH"] = f"{tmp}:{path}"
             src = a * 300
             os.environ["STATEDIR"], os.environ["SRC"] = str(STATE), f"<reply>\n{src}\n</reply>"
-            assert "</reply>" not in tidy("a </reply> b")  # 囲みが崩れない
             for body, want in (
                 ('[ "$(cat)" = "$SRC" ] && [ "$1 $3" = "-p sonnet" ] && [ "$CCSPK_SPEAK" = 0 ] && [ "$PWD" = "$STATEDIR" ]'
                  ' && echo "**要約**、TODO-7 の件。"',
@@ -727,18 +808,26 @@ def demo():
             ):
                 fake.write_text(f"#!/bin/sh\n{body}\n")
                 fake.chmod(0o755)
-                assert summarize(src) == want, body
+                assert rewrite(src) == want, body
+            # 翻訳の指示を渡す。訳に失敗したら元の英文を to_speech() して読む。返答の中の </reply> は消して囲む
+            os.environ["SRC"] = "<reply>\n**Done** a b.\n</reply>"
+            fake.write_text('#!/bin/sh\n[ "$(cat)" = "$SRC" ] && [ "$9" = "$PROMPT" ] && echo 済みました。\n')
+            for prompt, want in ((TRANSLATE_PROMPT, "済みました。"), (SUMMARY_PROMPT, "Done a </replyb.")):
+                os.environ["PROMPT"] = prompt
+                assert rewrite("**Done** a </reply>b.", TRANSLATE_PROMPT) == want, prompt
+            assert "ひらがな" in SUMMARY_PROMPT and "ひらがな" in TRANSLATE_PROMPT
+            assert unwrap("a</re</reply>ply><</reply>/reply>b") == "ab"
             fake.write_text("#!/bin/sh\nsleep 1; echo 要約\n")  # 待てば要約を返すので、打ち切らないと落ちる
-            SUMMARY_TIMEOUT = 0.5  # 時間切れ
-            assert summarize(src) == a * LIMIT
-            SUMMARY_TIMEOUT = saved[2]
+            SUMMARY_TIMEOUT = 0.5  # 時間切れ。元の文は clip() でなく to_speech() する
+            assert rewrite("**" + src) == a * LIMIT
+            SUMMARY_TIMEOUT = saved[3]
             # claude が無い。本物の claude を起こさないよう、PATH は tmp だけにする
             fake.unlink()
             os.environ["PATH"] = str(tmp)
-            assert summarize(src) == a * LIMIT
+            assert rewrite("**" + src) == a * LIMIT
     finally:
         shutil.rmtree(tmp)
-        SUMMARY, STATE, SUMMARY_TIMEOUT, play, play_summary = saved
+        SUMMARY, TRANSLATE, STATE, SUMMARY_TIMEOUT, play, play_rewritten = saved
 
     # 止めるのは PIDFILE にある子プロセス全部。終わったもの・使い回された番号は触らない
     global PIDFILE
@@ -831,7 +920,7 @@ def main():
             raw = questions(payload)
         else:
             raw = payload.get("last_assistant_message") or ""
-        text, to_summarize = prepare(raw)
+        text, flag, body = prepare(raw)
         if (display or ask) and not text:
             return  # 表だけの途中の文章などで、読んでいる返答を止めない
         try:
@@ -847,9 +936,9 @@ def main():
                 LAST.write_text(text)
             except OSError:
                 pass
-            speak(text, to_summarize, queued)
-            if not to_summarize:
-                check.record(text)  # 要約するときは子プロセスが、読む要約を記録する
+            speak(body, flag, queued)
+            if not flag:
+                check.record(text)  # 要約・翻訳するときは子プロセスが、読む文を記録する
     finally:
         if lock:
             lock.close()
@@ -907,6 +996,14 @@ def queue_(state):
     """再生中に次の文章が来たとき、前の再生を止めずに来た順に読むかを切り替える（on・off）。引数なしは今の状態を表示する。"""
     switch(QUEUE, state)
     print("on" if QUEUE.exists() else "off")
+
+
+@click.command()
+@click.argument("state", required=False, type=click.Choice(["on", "off"]))
+def translate(state):
+    """英文の返答を日本語に訳してから読むかを切り替える（on・off）。引数なしは今の状態を表示する。次の返答から効く。"""
+    switch(TRANSLATE, state)
+    print("on" if TRANSLATE.exists() else "off")
 
 
 def switch(path, state):
