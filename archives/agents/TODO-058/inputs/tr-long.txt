@@ -1,0 +1,26 @@
+TODO-087 is closed. It is committed, tagged `v1.7.0`, and pushed to `develop`. The GitHub Pages deploy had only just been queued; I haven't seen it finish, so it's worth checking.
+
+**What changed on the title screen**
+- **Moving board:** a small board now runs the same random search as the demo, using the board and colours you have selected. It sits below "PUZZLE" in portrait, and to the left of the how-to panel in landscape, because landscape has no spare height. Tapping it does nothing and it makes no sound.
+- **Board buttons:** 46 → 58 px tall, with a bigger board picture so 8×8 and 6×10 are easier to tell apart.
+- **Colour buttons:** the same height, now showing the F, W and X pieces instead of small dominoes.
+- **Records screen:** it now uses the same small-board drawing function as the title. The records screen's board-choice buttons stay at their old height.
+- **Docs:** the user guide has a sentence about the moving board, and `docs/images/title.png` is retaken. The capture script now waits until four pieces are on the board.
+
+**Checks**
+- The reviewer found five things, all fixed:
+  - the landscape layout total in a comment was wrong
+  - the board updates were hand-written instead of using the existing `place()`/`remove()`
+  - `docs/developer.md` was missing the new function
+  - the wording "below the title" was wrong for landscape
+  - the user guide didn't say the board runs the random search
+- The reviewer measured that the timer never runs twice, whether you switch boards repeatedly, leave and come back, or switch while it is paused after a solve.
+- The screen check covered landscape and portrait with both boards: nothing spills out or overlaps, and the board is moving (40 → 30 filled squares over 2 seconds).
+- All 430 tests in `tests.html` pass, and there are no console errors.
+
+**Things to know**
+- The title screen now loads the solution data as soon as it opens. That took 175 ms on this machine for 6×10, the first time you select that board; I haven't checked slower devices. I left it because the main game reuses that data afterwards.
+- The records screen was only checked with no records saved, so I haven't looked at a finished board there on screen. The drawing code was moved unchanged, and the reviewer confirmed that by reading it.
+- Cost was about $7.0 in total.
+
+I opened the portrait screenshot and the new `title.png` in imv. Since this item is closed, this is a good point to `/clear`.

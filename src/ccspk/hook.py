@@ -77,7 +77,7 @@ TRANSLATING = "--translate"  # PLAY の後ろに付けると、子プロセス�
 # 訳に回すのは先頭のこの字数まで。英文は訳すと字数が 3 分の 1 ほどになるので、訳した後で LIMIT 字ほどになるよう
 TRANSLATE_MAX = LIMIT * 3
 AFTER = "--after="  # PLAY の後ろに付けると、子プロセスは鳴らす前に、この pidfd の前の子プロセスが終わるのを待つ
-SUMMARY_TIMEOUT = 30  # 要約・翻訳の claude -p を待つ秒数。要約は Sonnet で 5〜6 秒だった
+SUMMARY_TIMEOUT = 30  # 要約・翻訳の claude -p を待つ秒数。要約は Sonnet・effort medium で 4〜8 秒だった（TODO-058）
 # 要約に回すのは先頭のこの字数まで。本文は子プロセスの argv 1 つで渡すので、上限（131,072 バイト。
 # 日本語でおよそ 43,000 字）を超えると起こせない。claude -p に渡す量（料金と時間）も抑える
 SUMMARY_MAX = 20000
@@ -307,7 +307,7 @@ def rewrite(text, prompt=SUMMARY_PROMPT):
     try:
         STATE.mkdir(parents=True, exist_ok=True)
         p = subprocess.run(
-            ["claude", "-p", "--model", "sonnet", "--setting-sources", "", "--tools", "",
+            ["claude", "-p", "--model", "sonnet", "--effort", "medium", "--setting-sources", "", "--tools", "",
              "--no-session-persistence", prompt],
             # 指示と返答の境目を示す。囲まないと、英語の返答を要約する文と受け取らないことがある（TODO-044）。
             input=f"<reply>\n{unwrap(text)}\n</reply>",
@@ -885,7 +885,7 @@ def demo():
             src = a * 300
             os.environ["STATEDIR"], os.environ["SRC"] = str(STATE), f"<reply>\n{src}\n</reply>"
             for body, want in (
-                ('[ "$(cat)" = "$SRC" ] && [ "$1 $3" = "-p sonnet" ] && [ "$CCSPK_SPEAK" = 0 ] && [ "$PWD" = "$STATEDIR" ]'
+                ('[ "$(cat)" = "$SRC" ] && [ "$1 $3 $5" = "-p sonnet medium" ] && [ "$CCSPK_SPEAK" = 0 ] && [ "$PWD" = "$STATEDIR" ]'
                  ' && echo "**要約**、TODO-7 の件。"',
                  "要約、TODOナナの件。"),
                 ("cat >/dev/null; printf 'x%.0s' $(seq 300)", "x" * LIMIT),  # 要約の後も clip() を通す
@@ -898,7 +898,7 @@ def demo():
                 assert rewrite(src) == want, body
             # 翻訳の指示を渡す。訳に失敗したら ""。返答の中の </reply> は消して囲む
             os.environ["SRC"] = "<reply>\n**Done** a b.\n</reply>"
-            fake.write_text('#!/bin/sh\n[ "$(cat)" = "$SRC" ] && [ "$9" = "$PROMPT" ] && echo 済みました。\n')
+            fake.write_text('#!/bin/sh\n[ "$(cat)" = "$SRC" ] && [ "${11}" = "$PROMPT" ] && echo 済みました。\n')
             for prompt, want in ((TRANSLATE_PROMPT, "済みました。"), (SUMMARY_PROMPT, "")):
                 os.environ["PROMPT"] = prompt
                 assert rewrite("**Done** a </reply>b.", TRANSLATE_PROMPT) == want, prompt

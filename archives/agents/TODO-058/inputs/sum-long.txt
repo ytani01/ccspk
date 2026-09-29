@@ -1,0 +1,92 @@
+環境を一通り調べました。**まだ何も書き換えていません**（`docs/setup.md` に反映するかは下で相談）。
+
+## 調べて分かった構成
+
+| 区分 | 中身 |
+| --- | --- |
+| パッケージ | 公式（明示）266、AUR 27、flatpak 1（Shotcut のみ）、全体 1523 |
+| ブート | limine + plymouth、カーネルは `linux-cachyos` と `linux-cachyos-lts` の 2 本 |
+| ディスク | `/boot` vfat、`/` ext4（btrfs ではない）、`/tmp` tmpfs、`/win/c` NTFS（`uid=649,gid=121`）、swap は zram |
+| デスクトップ | niri（Wayland）+ quickshell / dms-shell-niri / matugen / wofi |
+| ログイン | greetd + tuigreet。`initial_session` で ytani を `niri-session` に自動ログイン |
+| ロケール | `ja_JP.UTF-8`、キーマップ us、ホスト名 `ytlenovo-niri` |
+| ユーザー | uid 649 / gid 121(yt)、所属は wheel, video, input, audio, storage, lp, network, rfkill, greeter, nopasswdlogin |
+| ランタイム | mise（go, node, uv, pipx, ruff, usage, playwright, basedpyright, flake8, mypy, pylint） |
+| 有効な unit（system） | NetworkManager, systemd-resolved/timesyncd, bluetooth, cups(+socket/path), avahi, cronie, keyd, greetd, ufw, autofs, earlyoom, ananicy-cpp, intel_lpmd, fstrim.timer, cachyos-rate-mirrors.timer |
+| 有効な unit（user） | syncthing, hyprwhspr, pipewire / pipewire-pulse / wireplumber, gnome-keyring |
+
+## インストール・設定の順番
+
+前後関係が**本当に決まっているところ**だけ先に。ほかは順不同です。
+
+- **UID/GID は最初**（`/etc/fstab` の `uid=649,gid=121` と、あとから置くファイルの所有者に効く）
+- **paru は base-devel の後**。AUR の 27 個は全部その後ろ
+- **dot.files の展開はパッケージの後**（zsh・mise の設定が入っている前提）
+- **emacs のビルドは日本語入力の後**（`mozc_emacs_helper` を使うため）
+- **r8125-dkms はカーネルを 2 本とも入れ終えてから**（dkms が両方に対してビルドされる）
+- **greetd を有効にするのは、TTY で `niri-session` が起動すると確かめた後**。`initial_session` で自動ログインする設定なので、壊れているとログイン画面まで到達しない
+
+### 0. インストーラ段階
+
+- ディスク構成（`/boot` vfat / `/` ext4）、ブートローダは limine、カーネルは `linux-cachyos`
+- ロケール `ja_JP.UTF-8`、キーマップ us、ホスト名
+- **ユーザー `ytani` を UID 649 / GID 121(yt) で作る。** ここでやるのが一番楽（あとからなら [change-uid.md](docs/change-uid.md)）
+
+### 1. 土台（ネットワークと更新）
+
+NetworkManager、`systemd-resolved` / `systemd-timesyncd` → ミラーを選び直して（`cachyos-rate-mirrors`, `reflector`）`pacman -Syu` を一度通す → `intel-ucode` と `linux-cachyos-lts`（第二カーネルの保険）。
+
+### 2. ハードウェア
+
+ここでこけると先へ進めないので早めに。
+
+- グラフィック: `chwd`, `mesa`, `vulkan-intel`, `intel-media-driver`, `vpl-gpu-rt`
+- 有線 NIC: `r8125-dkms`（カーネルを入れ終えた後）
+- 音: `pipewire-pulse`, `wireplumber`, `sof-firmware`, `alsa-*`, `pavucontrol`
+- Bluetooth: `bluez` 一式 → `bluetooth.service`（→ [bluetooth.md](docs/bluetooth.md)）
+- **キー配列: `keyd`** → `keyd.service`。CapsLock→Ctrl が効かないと以降の作業がつらいので、ここで入れる（設定は `~/dot.files/etc/etc_keyd_default.conf`）
+- `/etc/fstab` に `/win/c` の NTFS を書く
+
+### 3. CLI 環境
+
+`base-devel`, `git`, `github-cli`, `tmux`, `ripgrep`, `neovim`/`vim`/`micro` → **`paru`** → `~/dot.files` を clone して `setup-zsh.sh`、`install-mise.sh` → ログインシェルを zsh にして入り直す。
+
+### 4. GUI（niri）
+
+`niri`, `xwayland-satellite`, `quickshell`, `dms-shell-niri`, `matugen`, `wofi`, `wtype`/`ydotool`、フォント（`noto-fonts-cjk`, nerd 系, `ttf-udev-gothic`, `ttf-firge`, `otf-ipafont`）、端末（`ghostty`, `alacritty`）。
+TTY から `niri-session` が上がるのを確かめてから、`greetd` + `tuigreet` + `regreet` を入れ、`/etc/greetd/config.toml` を dot.files 側へのリンクにして `greetd.service` を有効化。
+
+### 5. 日本語入力
+
+`fcitx5`, `fcitx5-gtk`, `fcitx5-qt`, `fcitx5-configtool`, `fcitx5-mozc-ut`, `mozc` → 環境変数は `~/.config/environment.d/90-fcitx.conf`（dot.files 側が実体）、起動は niri の `autostart.sh`（→ [system.md](docs/system.md)）。
+
+### 6. emacs
+
+`bin/emacs-build` でソースからビルド（`/usr/local` に入る）→ `bin/mozc-helper-build` で `mozc_emacs_helper`（→ [emacs.md](docs/emacs.md)）。
+
+### 7. アプリケーション
+
+ブラウザ（`firefox`, `helium-browser-bin`, `google-chrome-dev`）、`obsidian`, `onlyoffice-bin`, `slack-desktop`, `zoom`, `gimp`, `inkscape`, `freecad`, `mpv`/`vlc`, `obs-studio`, `ardour`, `evince`/`okular`, `qimgv`/`imv`/`swayimg`, `qdirstat`。flatpak は Shotcut 1 本だけなので最後でよい。
+
+### 8. 周辺機器
+
+- 印刷: `cups`, `cups-browsed`, `avahi`, `ipp-usb`, `system-config-printer` +（AUR）`cnijfilter2`, `cnijfilter-mx720series`, `cups-bjnp`
+- スキャナ: `sane`, `sane-airscan`
+- ネットワークマウント: `autofs-git` → `autofs.service`
+- 入力機器: `solaar`（Logicool、niri の autostart から起動）、Keychron の udev ルールは `~/dot.files/etc/udev/rules.d/`
+- 音声入力: `hyprwhspr`（user unit）, `whisper-cpp`, `nerd-dictation-git`
+- リモート: `sunshine`（autostart から起動）
+
+### 9. 同期・自動起動・ファイアウォール
+
+`syncthing`（user unit。`~/syncthing/scansnap` と `~/syncthing/vault1`）→ `~/work` と `~/Projects` を clone（**`~/bin` の多くがそこへのリンクなので、clone するまで壊れたリンクのまま**）→ `cronie` と crontab（`@reboot ~/bin/slack-ipaddr.sh`）→ `ufw` を有効化。
+
+## 気づいた点
+
+- **指紋認証は途中で止まっている。** `libfprint-tod`, `libfprint-2-tod1-elan` は入っているのに `fprintd` が無く、PAM 設定も無い。手順に書くなら「入れかけ」と明記するか、そもそも載せないかを決めたい
+- **`/etc/greetd/` に `config.toml.backup-20260716-204625` と `config.toml.pacsave`（`../../conf/etc/greetd/config.toml` への切れたリンク）が残っている。** 復元手順に写すと混乱するので、片付けの対象
+- `netctl`, `iwd`, `wpa_supplicant` が明示インストールされているが、有効なのは NetworkManager だけ。手順には NetworkManager だけ書けばよさそう
+
+---
+
+これを `docs/setup.md`（未記入の節）と `docs/packages.md` の「導入済みパッケージ」に書き起こす作業を、**TODO-007 として立てますか。** 上の指摘 3 点をどう扱うかは、立てるときに決めたいところです。
