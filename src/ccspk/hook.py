@@ -103,11 +103,11 @@ def to_speech(text):
     text = re.sub(r"^\s*(?:[-*+]|\d+\.)\s+", "", text, flags=re.M)
     text = text.replace("_", " ")
     # エンジンが読まない記号。「~」は範囲にも使うので下で扱う。`TODO-013` の件 のように
-    # 囲まれた番号の後ろのスペースを TODO の置き換えで消せるよう、ここで消す
-    text = re.sub(r"[`*>]", "", text)
-    # 「決着させた ( 6e985ac ) ので」のコミット ID は、前後のスペースごと消す。
-    # 取り違えないよう、この形のときだけ
-    text = re.sub(r"[ \t]+\([ \t]+[0-9a-f]{7}[ \t]+\)[ \t]+", "", text)
+    # 囲まれた番号の後ろのスペースを TODO の置き換えで消せるよう、ここで消す。
+    # ` はコミット ID を見分けるのに使うので、その後で消す
+    text = re.sub(r"[*>]", "", text)
+    text = drop_commit_ids(text)
+    text = text.replace("`", "")
     # TODO-027 は「トゥードゥー ゼロニーナナ」と桁ごとに読む。「-」を残すと間が入り、消すと
     # TODO-100 が「ヒャク」になるのでカナにする。TODO-020〜022 の後ろの番号も同じ。
     # 直後のスペースは、下の数字と同じく日本語が続くときだけ消す
@@ -126,6 +126,25 @@ def to_speech(text):
     text = re.sub(r"(?<=[0-9０-９])[ \t]+(?=[\u3041-\u30ff\u4e00-\u9fff])", "", text)
     text = re.sub(r"\s+", " ", text).strip()
     return clip(text)
+
+
+def drop_commit_ids(text):
+    """`0b7c291` のように ` で囲んだ 16 進 7 桁（`596eeac..4cbdc8c` も）をコミット ID と見て消す。
+    8 桁はセッション ID などなので含めない。消すと文が壊れるもの（`fd36df8` にタグを付けた）は残す。"""
+    cid = r"`[0-9a-f]{7}(?:\.\.[0-9a-f]{7})?`"
+    # ID のほかに中身が無い文は、文ごと消す（コミットは `d774e35` です。 / 最新のコミット: `a1a9b44`）。
+    # 「、」でつながる文は中身があるので残す
+    text = re.sub(
+        rf"(?:^|(?<=[。！？!?]))[^。！？!?\n、]*?(?:コミットは[ \t]*{cid}[ \t]*(?:です|でした)|[:：][ \t]*{cid})[ \t]*(?:。|$)",
+        "", text, flags=re.M,
+    )
+    # （`0b7c291`）・（`37c1c3b`、`6e985ac`）はカッコごと、（`773c552`、push はしていません）は ID だけ
+    text = re.sub(rf"[ \t]*[（(][ \t]*{cid}(?:[ \t]*[、,][ \t]*{cid})*[ \t]*[）)]", "", text)
+    text = re.sub(rf"(?<=[（(])[ \t]*{cid}[ \t]*[、,。][ \t]*", "", text)
+    # `b54297d` でコミットしました → コミットしました
+    text = re.sub(rf"[ \t]*{cid}[ \t]*(?:で|に|として)[ \t]*(?=コミット)", "", text)
+    # 件名が続くもの（`343f827` feat(bin): … / `eb0763a feat(ghostty): …`）は件名だけ読む
+    return re.sub(r"`[0-9a-f]{7}`?[ \t]+(?=[a-z]+(?:\([^)\n]*\))?!?:[ \t])", "", text)
 
 
 def questions(payload):
@@ -339,14 +358,33 @@ def demo():
     assert to_speech("3 files と 1 ファイル、v1 A") == "3 files と 1ファイル、v1 A"
     assert to_speech("x 1  字、**2** 行、１８０ 字") == "x 1字、2行、１８０字"
     assert to_speech("手順 1\n次へ") == "手順 1 次へ"  # 行をまたぐときはつなげない
-    # コミット ID は「 ( 16 進 7 桁 ) 」の形だけ消す
-    assert to_speech("決着させた ( 6e985ac ) ので、foo ( `1234567` ) bar、x ( abcdefa ) y") == (
-        "決着させたので、foobar、xy")
-    assert to_speech("a (6e985ac ) b、a ( 6e985ac) b、a( 6e985ac ) b、a ( 6e985ac )b") == (
-        "a (6e985ac ) b、a ( 6e985ac) b、a( 6e985ac ) b、a ( 6e985ac )b")  # スペースが欠ける
-    assert to_speech("a ( 6E985AC ) b、a ( 6e985a ) b、a ( 6e985acd ) b、a （ 6e985ac ） b") == (
-        "a ( 6E985AC ) b、a ( 6e985a ) b、a ( 6e985acd ) b、a （ 6e985ac ） b")  # 大文字・桁数・全角
-    assert to_speech("a\n( 6e985ac ) b、a ( 6e985ac\n) b") == "a ( 6e985ac ) b、a ( 6e985ac ) b"  # 改行はスペースに数えない
+    # コミット ID は ` で囲んだ 16 進 7 桁。ID だけ消す
+    assert to_speech("コミットしました（`0b7c291`）。") == "コミットしました。"
+    assert to_speech("決着させました（`773c552`、push はしていません）（`536abc9`。未 push）。") == (
+        "決着させました（push はしていません）（未 push）。")
+    assert to_speech("どちらも（`37c1c3b`、`6e985ac`）。push できました (`596eeac..4cbdc8c`)。") == (
+        "どちらも。push できました。")
+    assert to_speech("`b54297d` でコミットし、`2c730d0` としてコミットしました") == "コミットし、コミットしました"
+    assert to_speech("辞書を `960ac07` でコミットし、master に `44735a6` にコミットした") == (
+        "辞書をコミットし、master にコミットした")  # 前のスペースも消す
+    assert to_speech("`abc1234`、`def5678` を push した") == "abc1234、def5678を push した"  # カッコの外は残す
+    assert to_speech("- `343f827` feat(bin): hook の設定\n- 最新は `f428514 feat(docs): 振り分ける`") == (
+        "feat(bin): hook の設定 最新は feat(docs): 振り分ける")
+    # ID のほかに中身が無い文は文ごと消す
+    assert to_speech("済みました。コミットは `d774e35` です。次へ") == "済みました。次へ"
+    assert to_speech("- **最新のコミット**: `a1a9b44`。\n- cachyos-admin: `487c1ac..424f0b7`\n以上") == "以上"
+    assert to_speech("済み。前のコミットは **`abc1234`** でした。最新：`a1a9b44`。次へ") == "済み。次へ"
+    # 「、」でつながる文や、「コミットは」でない文は残す
+    assert to_speech("2 つに分けたため、コミットは `1acb1bf` です。PID は `1234567` です。") == (
+        "2つに分けたため、コミットは 1acb1bf です。PID は 1234567です。")
+    # 消すと文が壊れるものは残す
+    assert to_speech("`fd36df8` に注釈付きタグ `v0.1.0` を付けました") == "fd36df8に注釈付きタグ v0.1.0を付けました"
+    assert to_speech("`origin/master` は `7a526e0`（TODO-006 のコミット）を指していて") == (
+        "origin/master は 7a526e0（TODOゼロゼロロクのコミット）を指していて")
+    assert to_speech("`a1a9b44` より前の 5 件。`88ef11d` の記録どおり") == "a1a9b44より前の 5件。88ef11d の記録どおり"
+    assert to_speech("`a5216c7` main と同じ") == "a5216c7 main と同じ"  # 件名の形でなければ読む
+    # 8 桁・大文字・` で囲まないものは ID と見ない
+    assert to_speech("（`a1b2c3d4`）（`6E985AC`）（6e985ac）") == "（a1b2c3d4）（6E985AC）（6e985ac）"
     assert sentences("直した。確かめる？ はい! 終わり") == ["直した。", "確かめる？", "はい!", "終わり"]
     assert sentences("句点なし") == ["句点なし"]
     assert sentences("") == []
