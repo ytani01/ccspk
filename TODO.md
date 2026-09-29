@@ -1,39 +1,7 @@
 # TODO
 
-**残っている項目: TODO-034、TODO-035。** これまでに 33 件を決着させた。
+**残っている項目: TODO-035。** これまでに 34 件を決着させた。
 新しく足すときは「完了済み」の上に節を作る。**番号は `TODO-036` から。**
-
----
-
-## TODO-034. 文書の説明を今のコードに合わせる
-
-|      | main | 担当 |
-|------|------|------|
-| 見込み | Opus 5.5 / effort medium | main（書き換え）+ reviewer（Opus 5.5 / high） |
-
-- [ ] `docs/Developer.md` の「3.6 整形と分割」の表に、`drop_commit_ids()`（コミット ID を消す）と
-  `squeeze()`（英単語と日本語の間のスペースを詰める。`chunks()` が呼ぶ）を足す。
-  `to_speech()` の行にもコミット ID を消すことを書く
-- [ ] `docs/Developer.md` の「3.7 定数」の表に `DIGITS`（`TODO-` の番号を桁ごとに読むカナ）を足す
-- [ ] `docs/Developer.md` の「4.1 自己テスト」で、確かめている関数の並びを今の `demo()` に合わせる。
-  `drop_commit_ids`・`squeeze` が抜けている。dict 側は `accent_of` だけでなく `halfwidth` も確かめている。
-  `assemble()` と `questions()` を「も…も確かめている」と 2 文で足している所も、まとめて 1 つにする
-- [ ] `docs/Developer.md` に、リポジトリの `.claude/settings.json` の Stop フック（`src/` か
-  `pyproject.toml` が新しければ `ccspk test` を走らせ、通ったら入れ直す。TODO-031）を書く。
-  `CLAUDE.md` は「仕組みは `docs/Developer.md`」と言っているのに、Developer.md に無い。
-  「1. ファイル」の表にも `.claude/settings.json` を足す
-- [ ] `docs/UsersGuide.md` の「2.2 記号と数字」の見出しを「2.2 辞書で直せないもの」にする。
-  中身に英単語と日本語の間のスペースとコミット ID が入っていて、見出しと合っていない。
-  `docs/Developer.md` からのリンク（`#22-記号と数字`、2 か所）を張り替え、リンクの文字列も直す
-- [ ] 同じ節の書き出し「`to_speech` で置き換えている」を直す。スペースを詰めるのは `chunks`
-  （同じ節の中にそう書いてある）
-
-背景:
-
-- 2026-09-29 に README.md・CLAUDE.md・docs/ を `src/` と突き合わせて見つけた。
-  終了ステータス、ファイルの場所、フックの流れ（3.1）、定数の値は合っていた
-- 見出しは利用者と相談して「辞書で直せないもの」に決めた（書き出しの「辞書で直せないものは」と揃う）
-- reviewer には、書いた説明が今のコードと合っているか、同じ説明が 2 か所に残っていないかを見させる
 
 ---
 

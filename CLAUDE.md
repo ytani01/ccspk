@@ -18,9 +18,8 @@ uv tool install .         # 利用者の環境へ入れる
 ## 注意
 
 - 整形や分割を変えたら `demo()` に例を足す
-- `src/` か `pyproject.toml` が前回のインストールより新しければ、返答の終わりに Stop フック
-  （`.claude/settings.json`）が `ccspk test` を走らせ、通ったら `uv tool install --reinstall .` で
-  入れ直す。落ちたら入れ直さず、`systemMessage` で知らせる。`ccspk` を入れていない環境では何もしない
+- `src/` か `pyproject.toml` を変えると、返答の終わりに Stop フック（`.claude/settings.json`）が
+  `ccspk test` を走らせ、通れば入れ直す。詳しくは `docs/Developer.md` の「4.4 入れ直し」
 - フックを手で動かすときは、本物の `$XDG_RUNTIME_DIR` を使わない（読み上げが止まったままに
   なったり、鳴っている読み上げを止めたりする）。手順は `docs/Developer.md` の「4.2 フックを手で動かす」
 - 辞書はリポジトリに置かない。`dict add`・`remove`・`import` が `~/.config/ccspk/user_dict.json` へ

@@ -17,6 +17,7 @@
 | `src/ccspk/__init__.py` | `__version__`（`--version` で出す版） |
 | `src/ccspk/click_utils.py` | `--debug`・`--version` などの共通オプション |
 | `src/ccspk/mylog.py` | loguru のログの設定 |
+| `.claude/settings.json` | このリポジトリで作業するときの Stop フック。変更を入れ直す（[「4.4 入れ直し」](#44-入れ直し)） |
 | `systemd/voicevox-engine.service` | VOICEVOX のエンジンを常駐させる user unit。起動のたびに辞書を読み込む |
 
 ## 2. 動き方
@@ -26,7 +27,7 @@
   切らないよう、180 字目から 240 字目までで最初の文末まで読む。文末が無ければ
   読点まで、それも無ければ 180 字で切る。コードブロックは
   「コード省略」に置き換え、表・Markdown の記号・リンクの URL は消す
-- 読み間違いを減らすため、記号と数字は置き換え、単語の読みはエンジンの辞書で直す。どちらも
+- 読み間違いを減らすため、辞書で直せないもの（記号や数字など）は置き換え、単語の読みはエンジンの辞書で直す。どちらも
   [UsersGuide.md](UsersGuide.md#2-読み上げの辞書) にある
 - 文ごとに合成し、1 文目ができたらすぐ鳴らす。2 文目以降は鳴らしている
   間に合成する。短い文の直後に長い文が来ると、継ぎ目で数秒待つことがある
@@ -150,14 +151,16 @@ MessageDisplay フックとして、`AskUserQuestion` を呼ぶ直前に PreTool
 
 | 関数 | すること |
 |---|---|
-| `to_speech()` | コードブロックを「コード省略」に置き換え、Markdown の記号・表・URL を除き、記号と数字の読みを整え、最後に `clip()` を通す |
+| `to_speech()` | コードブロックを「コード省略」に置き換え、Markdown の記号・表・URL を除き、`drop_commit_ids()` でコミット ID を消し、記号と数字の読みを整え、最後に `clip()` を通す |
+| `drop_commit_ids()` | `` ` `` で囲んだコミット ID を消す。消すと文が壊れるものは残す |
 | `clip()` | `LIMIT` 字を超えるときに、文の途中で切らないように縮める |
 | `sentences()` | 文末（`ENDS`）の後ろで文に分ける |
 | `split_first()` | 文を、音を早めるために前後 2 つに切る |
-| `chunks()` | 合成する単位。1・2 文目は `split_first()` で切り、3 文目以降は文ごと |
+| `chunks()` | 合成する単位。1・2 文目は `split_first()` で切り、3 文目以降は文ごと。最後にそれぞれ `squeeze()` を通す |
+| `squeeze()` | 英単語と日本語の間のスペースを詰める。`split_first()` がスペースで切るので、切った後に通す |
 
 どこで切るかの決まりは [「2. 動き方」](#2-動き方) に、
-記号と数字の置き換えは [UsersGuide の「2.2 記号と数字」](UsersGuide.md#22-記号と数字) にある。
+記号や数字などの置き換えは [UsersGuide の「2.2 辞書で直せないもの」](UsersGuide.md#22-辞書で直せないもの) にある。
 
 ### 3.7 定数
 
@@ -174,6 +177,7 @@ MessageDisplay フックとして、`AskUserQuestion` を呼ぶ直前に PreTool
 | `CUT` | 正規表現 | 1・2 文目を切る区切り |
 | `CUT_MIN` | 8 | これより手前では切らない |
 | `SPACE_WITHIN` | 30 | この字数までに `CUT` が無いときだけ、スペースで切る |
+| `DIGITS` | `ゼロ イチ ニー …` | `TODO-` の番号を桁ごとに読むカナ（0〜9） |
 | `PARTS_KEEP` | 600 | そろわないまま残った MessageDisplay の分は、この秒数で消す |
 | `SAME_WITHIN` | 5 | 読んでからこの秒数のうちに同じ文が来たら読まない。長くすると、続けて同じ返答（「はい。」など）が来たときに黙ってしまう |
 
@@ -183,16 +187,16 @@ MessageDisplay フックとして、`AskUserQuestion` を呼ぶ直前に PreTool
 
 ### 4.1 自己テスト
 
-整形と分割（`to_speech`、`clip`、`sentences`、`split_first`、`chunks`）は、
-`demo()` の `assert` で確かめている（pytest ではない）。通れば `ok` と出る。
-個別に走らせる手段は無い。lint の設定は無い。
+hook の `demo()` は、整形と分割（`to_speech`、`drop_commit_ids`、`clip`、`sentences`、`split_first`、
+`chunks`、`squeeze`）、PreToolUse の質問の文を取り出す `questions()`、MessageDisplay の分をつなぐ
+`assemble()`（一時ディレクトリで）を `assert` で確かめている（pytest ではない）。
+dict の `demo()` は、アクセントの位置の決め方（`accent_of`）と、全角から半角へ戻す `halfwidth` を確かめている。
+通れば `ok` と出る。個別に走らせる手段は無い。lint の設定は無い。
 
 ```sh
-uv run ccspk test   # hook の demo() と dict のアクセントの位置の決め方（accent_of）を両方
+uv run ccspk test   # hook と dict の demo() を両方
 ```
 
-MessageDisplay の分をつなぐ `assemble()` も、一時ディレクトリで確かめている。
-PreToolUse の質問の文を取り出す `questions()` も確かめている。
 整形や分割を変えたら、`demo()` に例を足す。`unusable()` と `main()` の分岐は
 環境に依るので、`demo()` では確かめていない。下の手順で手で確かめる。
 
@@ -273,6 +277,15 @@ PY
 ```
 
 目安は [「2. 動き方」](#2-動き方) にある。
+
+### 4.4 入れ直し
+
+このリポジトリで Claude Code を使うと、返答の終わりに `.claude/settings.json` の Stop フックが走る。
+`src/` か `pyproject.toml` に、前回のインストール（`uv tool dir` の下の `ccspk/uv-receipt.toml`）より
+新しいファイルがあれば、`uv run ccspk test` を走らせ、通ったら `uv tool install --reinstall .` で
+入れ直す。テストが落ちたときは入れ直さない。落ちたときと入れ直せなかったときは、出力の最後の 5 行を
+`systemMessage` で知らせる。
+`ccspk` を `uv tool install` で入れていない環境では何もしない。
 
 ## 5. TODO の番号
 
