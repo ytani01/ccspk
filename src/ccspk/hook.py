@@ -73,6 +73,7 @@ SUMMARY_TIMEOUT = 30  # 要約の claude -p を待つ秒数。Sonnet で 5〜6 �
 # 要約に回すのは先頭のこの字数まで。本文は子プロセスの argv 1 つで渡すので、上限（131,072 バイト。
 # 日本語でおよそ 43,000 字）を超えると起こせない。claude -p に渡す量（料金と時間）も抑える
 SUMMARY_MAX = 20000
+WRAP = "\0"  # mark_wrapped() が、前の行につなぐ行の頭に付ける印
 SUMMARY_PROMPT = f"""次の文は、ソフトウェア開発を手伝う AI アシスタントの返答を、読み上げ用に整えたものです。
 耳で聞いて分かるよう、{LIMIT} 字以内の日本語に要約してください。
 結論、利用者に頼んでいること、利用者が決めることを優先し、細かい経緯・ファイル名・コマンドは省いてください。
@@ -114,14 +115,18 @@ def to_speech(text):
 def tidy(text):
     """読み上げ用に整える（clip() の前まで）。"""
     # コードブロックと表は中身を読まない。閉じていないブロックは末尾まで
-    text = re.sub(r"^\s*(```|~~~).*?(?:^\s*\1|\Z)", " コード省略。 ", text, flags=re.S | re.M)
+    text = re.sub(r"^\s*(```|~~~).*?(?:^\s*\1|\Z)", "コード省略。", text, flags=re.S | re.M)
     text = re.sub(r"^\s*\|.*$", "", text, flags=re.M)
+    # 行頭の Markdown の記号。引用の「>」は、字下げと見ないよう行頭の空白ごと消す
+    text = re.sub(r"^[ \t]*(?:>[ \t]*)+", "", text, flags=re.M)
+    text = re.sub(r"^\s*#+\s*", "", text, flags=re.M)
+    text = re.sub(r"^\s*(?:[-*+]|\d+\.)\s+", "", text, flags=re.M)
+    # 行頭の空白が字下げだけのうちに、つなぐ行に印を付ける。下で _ や URL を消すと、行頭に空白が残る
+    text = mark_wrapped(text)
     # リンクは表示文字だけ残し、裸の URL は消す
     text = re.sub(r"!?\[([^\]]*)\]\([^)]*\)", r"\1", text)
     text = re.sub(r"https?://\S+", "", text)
-    # Markdown の記号。_ は識別子の切れ目なので空白にする
-    text = re.sub(r"^\s*#+\s*", "", text, flags=re.M)
-    text = re.sub(r"^\s*(?:[-*+]|\d+\.)\s+", "", text, flags=re.M)
+    # _ は識別子の切れ目なので空白にする
     text = text.replace("_", " ")
     # エンジンが読まない記号。「~」は範囲にも使うので下で扱う。`TODO-013` の件 のように
     # 囲まれた番号の後ろのスペースを TODO の置き換えで消せるよう、ここで消す。
@@ -145,7 +150,32 @@ def tidy(text):
     # 数字と単位の間のスペースで区切って読む（180 字 → ヒャクハチジュウ、ジ）ので、
     # 同じ行で日本語が続くときだけ消す。英語が続くとき（3 files）は 1 語と読まれないよう残す
     text = re.sub(r"(?<=[0-9０-９])[ \t]+(?=[\u3041-\u30ff\u4e00-\u9fff])", "", text)
-    return re.sub(r"\s+", " ", text).strip()
+    return re.sub(r"\s+", " ", end_lines(text)).strip()
+
+
+def mark_wrapped(text):
+    """字下げした行（空行の後を除く）を、箇条書きを折り返した続きと見て、頭に WRAP を付ける。
+    つなぐのは end_lines()。先につなぐと、drop_commit_ids() が文ごと消すときに前の行まで消してしまう。"""
+    lines = []
+    for line in text.splitlines():
+        s = line.strip()
+        lines.append(WRAP + s if s and line[0].isspace() and lines and lines[-1] else s)
+    return "\n".join(lines)
+
+
+def end_lines(text):
+    """WRAP の付いた行を前の行につなぎ、次に行が続く行の終わりに「。」を補う。見出しや箇条書きを次の行とつなげずに読む。
+    空行と、句読点・「：」・英語のピリオドで終わる行（閉じ括弧が後ろに付いても）には補わない。"""
+    ended = re.compile(rf"[{ENDS}{COMMAS}：:.][）」』】)\"'”’]*$")
+    lines = []
+    for s in text.splitlines():
+        s = s.strip()
+        if s[:1] == WRAP and lines and lines[-1]:
+            lines[-1] = f"{lines[-1]} {s[1:]}".strip()
+        else:
+            lines.append(s.lstrip(WRAP).strip())
+    last = max((i for i, s in enumerate(lines) if s), default=-1)
+    return "\n".join(s + "。" if s and i < last and not ended.search(s) else s for i, s in enumerate(lines))
 
 
 def drop_commit_ids(text):
@@ -326,7 +356,7 @@ def chunks(text):
 
 def squeeze(chunk):
     """英単語と日本語の間のスペースを詰める。スペースの前後に間が入る（reviewer の → レビュウタ'ントウ、ノ'）。
-    英単語同士（Claude Code）と数字の前後（行をまたいだ「手順 1 次へ」）は残す。
+    英単語同士（Claude Code）と数字の前後（字下げした行をつないだ「手順 1 次へ」）は残す。
     split_first がスペースで切るので、to_speech ではなく切った後の塊ごとに詰める。"""
     return re.sub(
         r"(?<=[A-Za-z])[ ]+(?=[ぁ-ヿ一-鿿])|(?<=[ぁ-ヿ一-鿿])[ ]+(?=[A-Za-z])", "", chunk
@@ -409,7 +439,7 @@ def demo():
         "https://example.com/y\n"
     )
     got = to_speech(src)
-    assert got == "見出し foo.py を 直した。 コード省略。 詳細 を見る", got
+    assert got == "見出し。 foo.py を 直した。 コード省略。 詳細 を見る", got
     # 上限を超えるときは、EXTEND 字までの間の次の文末まで。無ければ読点まで、
     # それも無ければ LIMIT 字で切る
     a = "あ"
@@ -431,8 +461,8 @@ def demo():
     assert to_speech("```\nonly code\n```") == "コード省略。"
     assert to_speech("") == ""
     assert to_speech("CCSPK_SPEAK を足す") == "CCSPK SPEAK を足す"
-    assert to_speech("説明\n```python\nsecret()\n") == "説明 コード省略。"
-    assert to_speech("前\n~~~\ncode\n~~~\n後") == "前 コード省略。 後"
+    assert to_speech("説明\n```python\nsecret()\n") == "説明。 コード省略。"
+    assert to_speech("前\n~~~\ncode\n~~~\n後") == "前。 コード省略。 後"
     # 記号の置き換えと、数字の直後のスペース
     assert to_speech("1〜4 秒、12～14 行目") == "1から4秒、12から14行目"
     assert to_speech("2 行 → 1 行、1 〜 4") == "2行から1行、1から4"
@@ -448,7 +478,27 @@ def demo():
     assert to_speech("PR-12、XTODO-1、TODO-1〜a") == "PR-12、XTODO-1、TODOイチからa"  # TODO- のほかは変えない
     assert to_speech("3 files と 1 ファイル、v1 A") == "3 files と 1ファイル、v1 A"
     assert to_speech("x 1  字、**2** 行、１８０ 字") == "x 1字、2行、１８０字"
-    assert to_speech("手順 1\n次へ") == "手順 1 次へ"  # 行をまたぐときはつなげない
+    # 次に行が続く行の終わりに「。」を補う。字下げした行は前の行の続きと見てつなぐ（数字の後のスペースも残す）
+    assert to_speech("手順 1\n次へ") == "手順 1。 次へ"
+    assert to_speech("- 手順 1\n  次へ\n- 次の項目") == "手順 1 次へ。 次の項目"
+    # つなぐのは drop_commit_ids() の後。先につなぐと、ID だけの続きの行と一緒に前の行も消える
+    assert to_speech("- 済ませた\n  コミット: `a1a9b44`\n- 次") == "済ませた。 次"
+    assert to_speech("# 見出し\n\n本文\n  - 入れ子\n\n  空行の後の字下げ\n") == "見出し。 本文。 入れ子。 空行の後の字下げ"
+    # 句読点や「：」で終わる行、空行、コードや表を消した跡には補わない
+    assert to_speech("済んだ。\n確かめる？\nはい!\n次に、\n手順:\n結果：\n| a |\n| - |\n以上\n") == (
+        "済んだ。 確かめる？ はい! 次に、 手順: 結果： 以上")
+    assert to_speech("前\n\n```\nx\n```\n\n後\n   \n最後") == "前。 コード省略。 後。 最後"
+    assert to_speech("前\n> 引用\n> > 入れ子\n後") == "前。 引用。 入れ子。 後"  # 引用の「>」は字下げと見ない
+    assert to_speech("一\n　全角で字下げ") == "一 全角で字下げ"
+    assert to_speech("  先頭が字下げ\n次") == "先頭が字下げ。 次"
+    # 字下げと見るのは元の行頭の空白だけ。_ や URL を消して空いた行頭はつながない
+    assert to_speech("- 一つ目\n- `__init__.py` を直した\n_x\nhttps://example.com を見る\n![](a.png) の説明") == (
+        "一つ目。 init .py を直した。 x。 を見る。 の説明")
+    # 閉じ括弧の前が句読点なら補わない。英語のピリオドも
+    assert to_speech("（済んだ。）\n「はい、」\nDone.\n（未定）\n次") == "（済んだ。） 「はい、」 Done. （未定）。 次"
+    assert to_speech("行末の空白 https://x\n次") == "行末の空白。 次"
+    assert to_speech('英語 "quoted."\n次\n| 表 |\n| - |\n') == '英語 "quoted." 次'  # 末尾の表を消した空行の前には補わない
+    assert to_speech("- 詳細は次を見る\n  https://x\n- 次") == "詳細は次を見る。 次"  # 続きの行が空になっても空白を残さない
     # コミット ID は ` で囲んだ 16 進 7 桁。ID だけ消す
     assert to_speech("コミットしました（`0b7c291`）。") == "コミットしました。"
     assert to_speech("決着させました（`773c552`、push はしていません）（`536abc9`。未 push）。") == (
@@ -460,7 +510,7 @@ def demo():
         "辞書をコミットし、master にコミットした")  # 前のスペースも消す
     assert to_speech("`abc1234`、`def5678` を push した") == "abc1234、def5678を push した"  # カッコの外は残す
     assert to_speech("- `343f827` feat(bin): hook の設定\n- 最新は `f428514 feat(docs): 振り分ける`") == (
-        "feat(bin): hook の設定 最新は feat(docs): 振り分ける")
+        "feat(bin): hook の設定。 最新は feat(docs): 振り分ける")
     # ID のほかに中身が無い文は文ごと消す
     assert to_speech("済みました。コミットは `d774e35` です。次へ") == "済みました。次へ"
     assert to_speech("- **最新のコミット**: `a1a9b44`。\n- cachyos-admin: `487c1ac..424f0b7`\n以上") == "以上"
@@ -524,7 +574,7 @@ def demo():
         "reviewerの指摘を受けて挙動が変わったので、", "同じreviewerに見てもらう。"]
     assert chunks("settings.json の登録は通りました。") == ["settings.json", "の登録は通りました。"]
     assert chunks("一。二。Claude Code の 3 files を見る。") == ["一。", "二。", "Claude Codeの 3 filesを見る。"]
-    assert chunks(to_speech("手順 1\n次へ")) == ["手順 1 次へ"]
+    assert chunks(to_speech("手順 1\n次へ")) == ["手順 1。", "次へ"]
     assert squeeze("ア  a") == "アa"  # 続くスペースもまとめて詰める
 
     # 質問の文だけをつなぐ。AskUserQuestion のほかは読まない
