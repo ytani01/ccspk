@@ -5,7 +5,7 @@ PreToolUse（AskUserQuestion）では質問の文を読む。
 環境変数 CCSPK_SPEAK が 1 のときだけ鳴らす。
 要約が入っていて（ccspk summary）、整えた文が LIMIT を超えるときは、再生の子プロセスが
 claude -p で要約してから読む。
-再生中に次の返答が来たら、前の再生を止めてから読む。
+再生中に次の返答が来たら、前の再生を止めてから読む。順番に読むモード（ccspk queue）なら、止めずに来た順に読む。
 pw-play が無い、エンジンに接続できない、PipeWire が動いていない、のどれかなら
 鳴らさずに終わり、理由を UNUSABLE に書いて覚える。ファイルがあるあいだは確かめもせずに終わる。
 """
@@ -15,6 +15,7 @@ import json
 import os
 import queue
 import re
+import select
 import shutil
 import signal
 import socket
@@ -42,7 +43,7 @@ COMMAS = "、，"  # 読点。半角の「,」は 1,000 のような数字の中
 SPEAKER = 119  # 夜語トバリ（明るい）
 ENGINE = "http://127.0.0.1:50021"
 PLAY = "--play"  # 合成と再生を受け持つ子プロセスの目印
-MODULE = "ccspk.hook"  # 子プロセスは python -m でこのモジュールを起こす。stop_playing() はこれで見分ける
+MODULE = "ccspk.hook"  # 子プロセスは python -m でこのモジュールを起こす。ours() はこれで見分ける
 # 1・2 文目を短く切る区切り。読点・閉じ括弧・コロンの後ろ、開き括弧の前。
 # 半角の「,」は 1,000、「:」は 12:30、「(」は name() のように語の中にも出るので、
 # 「,」は入れず、「:」は英数字が続くとき、「(」は英数字の直後のときは切らない
@@ -53,7 +54,7 @@ SPACE_WITHIN = 30  # この字数までに CUT が無いときだけスペース
 DIGITS = "ゼロ イチ ニー サン ヨン ゴー ロク ナナ ハチ キュウ".split()
 RUNTIME = os.environ.get("XDG_RUNTIME_DIR")
 BASE = Path(RUNTIME, "ccspk") if RUNTIME else Path(f"/tmp/ccspk-{os.getuid()}")
-PIDFILE = BASE.with_suffix(".pid")
+PIDFILE = BASE.with_suffix(".pid")  # 子プロセスの PID を 1 行に 1 つ、起こした順に
 # 使えないと分かった理由。$XDG_RUNTIME_DIR ならセッションが全部終わるまで、/tmp なら再起動まで残る
 UNUSABLE = BASE.with_suffix(".unusable")
 # 最後に読んだ文。返答の最後の文章は MessageDisplay と Stop の両方から来るので、2 度読まない
@@ -69,6 +70,9 @@ SAME_WITHIN = 5
 # あれば長い返答を要約して読む（ccspk summary on で作る）。環境変数 CCSPK_SUMMARY（1 か 0）が優先する
 SUMMARY = DICT_FILE.parent / "summary"
 SUMMARIZE = "--summarize"  # PLAY の後ろに付けると、子プロセスが要約してから読む
+# あれば前の再生を止めずに、来た順に読む（ccspk queue on で作る）
+QUEUE = DICT_FILE.parent / "queue"
+AFTER = "--after="  # PLAY の後ろに付けると、子プロセスは鳴らす前に、この pidfd の前の子プロセスが終わるのを待つ
 SUMMARY_TIMEOUT = 30  # 要約の claude -p を待つ秒数。Sonnet で 5〜6 秒だった
 # 要約に回すのは先頭のこの字数まで。本文は子プロセスの argv 1 つで渡すので、上限（131,072 バイト。
 # 日本語でおよそ 43,000 字）を超えると起こせない。claude -p に渡す量（料金と時間）も抑える
@@ -265,8 +269,8 @@ def summarize(text):
     return (to_speech(p.stdout) if p.returncode == 0 else "") or clip(text)
 
 
-def play_summary(text):
-    """子プロセスで、要約して記録してから鳴らす。"""
+def play_summary(text, after=None):
+    """子プロセスで、要約して記録し、前の子プロセスを待ってから鳴らす。要約は待つ前に済ませておく。"""
     text = summarize(text)
     try:
         lock = open(LOCK, "w")
@@ -278,22 +282,45 @@ def play_summary(text):
     finally:
         if lock:
             lock.close()
+    wait_for(after)
     play(text)
 
 
-def stop_playing():
-    """前の再生をプロセスグループごと止める。止めたら True を返す。"""
+def ours(pid):
+    """pid が再生の子プロセスか。終わった後に番号が別のプロセスへ使い回されていたら False。"""
     try:
-        pid = int(PIDFILE.read_text())
-        PIDFILE.unlink()
-        # 再生が終わった後に番号が別のプロセスへ使い回されていたら触らない
         args = Path(f"/proc/{pid}/cmdline").read_bytes().split(b"\0")
-        if PLAY.encode() not in args or MODULE.encode() not in args:
-            return False
-        os.killpg(pid, signal.SIGTERM)
-        return True
-    except (OSError, ValueError):
+    except OSError:
         return False
+    return PLAY.encode() in args and MODULE.encode() in args
+
+
+def playing():
+    """PIDFILE にある子プロセスのうち、まだ動いているものの PID を起こした順に返す。"""
+    try:
+        return [pid for pid in map(int, PIDFILE.read_text().split()) if ours(pid)]
+    except (OSError, ValueError):
+        return []
+
+
+def stop_playing():
+    """鳴っている再生も待っている再生も、プロセスグループごと止める。止めたら True を返す。"""
+    pids = playing()
+    PIDFILE.unlink(missing_ok=True)
+    # 後ろから止める。前から止めると、止めてから次に送るまでの間に、待っていた子プロセスが鳴り出しうる
+    for pid in reversed(pids):
+        try:
+            os.killpg(pid, signal.SIGTERM)
+        except OSError:
+            pass
+    return bool(pids)
+
+
+def wait_for(fd):
+    """pidfd の前の子プロセスが終わるまで待つ。fd が None なら待たない。"""
+    if fd is not None:
+        select.select([fd], [], [])
+        os.close(fd)
 
 
 def assemble(payload):
@@ -407,31 +434,51 @@ def play(text):
         subprocess.run(["pw-play", "-"], input=wav, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
-def child_args(text, to_summarize):
-    """子プロセスの python -m MODULE の後ろに付ける引数。"""
-    return [PLAY, *([SUMMARIZE] if to_summarize else []), text]
+def child_args(text, to_summarize, after=None):
+    """子プロセスの python -m MODULE の後ろに付ける引数。after は待つ前の子プロセスの pidfd。"""
+    return [PLAY, *([f"{AFTER}{after}"] if after is not None else []), *([SUMMARIZE] if to_summarize else []), text]
 
 
 def run_child(args):
     """子プロセスで、child_args() の引数を見て、要約してから鳴らすか、そのまま鳴らすかを振り分ける。"""
-    if args[:2] == [PLAY, SUMMARIZE] and len(args) == 3:
-        play_summary(args[2])
-    elif args[:1] == [PLAY]:
-        play(args[1])
+    if args[:1] != [PLAY] or len(args) < 2:
+        return
+    *flags, text = args[1:]
+    after = next((int(f.removeprefix(AFTER)) for f in flags if f.startswith(AFTER)), None)
+    if SUMMARIZE in flags:
+        play_summary(text, after)
+    else:
+        wait_for(after)
+        play(text)
 
 
-def speak(text, to_summarize=False):
-    """合成と再生を子プロセスに投げ、その PID を残す。to_summarize なら子プロセスが要約してから読む。"""
-    p = subprocess.Popen(
-        # -P: 作業ディレクトリを sys.path に入れない（そこに click.py などがあると、それを import してしまう）
-        [sys.executable, "-P", "-m", MODULE, *child_args(text, to_summarize)],
-        start_new_session=True,
-        stdin=subprocess.DEVNULL,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
+def speak(text, to_summarize=False, queued=False):
+    """合成と再生を子プロセスに投げ、その PID を PIDFILE に足す。to_summarize なら子プロセスが要約してから読む。
+    queued なら、前の子プロセスを止めずに残し、それが終わるまで新しい子プロセスを待たせる。"""
+    before = playing() if queued else []
+    try:
+        after = os.pidfd_open(before[-1]) if before else None
+    except OSError:
+        after = None
+    # 開いた後で確かめる。開く前に終わって番号が使い回されていたら、関係の無いプロセスを待ってしまう
+    if after is not None and not ours(before[-1]):
+        os.close(after)
+        after = None
+    try:
+        p = subprocess.Popen(
+            # -P: 作業ディレクトリを sys.path に入れない（そこに click.py などがあると、それを import してしまう）
+            [sys.executable, "-P", "-m", MODULE, *child_args(text, to_summarize, after)],
+            start_new_session=True,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            pass_fds=() if after is None else (after,),
+        )
+    finally:
+        if after is not None:
+            os.close(after)
     PIDFILE.parent.mkdir(mode=0o700, exist_ok=True)
-    PIDFILE.write_text(str(p.pid))
+    PIDFILE.write_text("".join(f"{pid}\n" for pid in [*before, p.pid]))
 
 
 def demo():
@@ -648,10 +695,19 @@ def demo():
             assert prepare("") == ("", False)
             # 子プロセスの振り分け。要約するときは play_summary、しないときは play に、同じ本文が届く
             calls = []
-            play, play_summary = (lambda t: calls.append(("play", t))), (lambda t: calls.append(("summary", t)))
-            for text, flag in (("本文。", True), ("本文。", False), (SUMMARIZE, False)):
+            play, play_summary = (lambda t: calls.append(("play", t))), (lambda t, a: calls.append(("summary", t, a)))
+            for text, flag in (("本文。", True), ("本文。", False), (SUMMARIZE, False), (AFTER + "3", False)):
                 run_child(child_args(text, flag))
-            assert calls == [("summary", "本文。"), ("play", "本文。"), ("play", SUMMARIZE)], calls
+            run_child(child_args("本文。", True, 7))
+            assert [c[:2] for c in calls] == [
+                ("summary", "本文。"), ("play", "本文。"), ("play", SUMMARIZE), ("play", AFTER + "3"), ("summary", "本文。")
+            ], calls
+            assert calls[0][2] is None and calls[-1][2] == 7
+            # 順番に読むモード。前の子プロセスが終わるまで鳴らさない
+            sleeper = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(0.5)"])
+            calls.clear()
+            run_child(child_args("後。", False, os.pidfd_open(sleeper.pid)))
+            assert sleeper.poll() is not None and calls[0][:2] == ("play", "後。"), calls
             play, play_summary = saved[3:]
             # 要約は偽の claude で。返した文は to_speech() を通す。失敗・空・時間切れは clip() した文
             fake = tmp / "claude"
@@ -683,6 +739,57 @@ def demo():
     finally:
         shutil.rmtree(tmp)
         SUMMARY, STATE, SUMMARY_TIMEOUT, play, play_summary = saved
+
+    # 止めるのは PIDFILE にある子プロセス全部。終わったもの・使い回された番号は触らない
+    global PIDFILE
+    saved = PIDFILE
+    tmp = Path(tempfile.mkdtemp())
+    PIDFILE = tmp / "ccspk.pid"
+    kids = [
+        subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)", MODULE, PLAY], start_new_session=True)
+        for _ in range(2)
+    ]
+    other = subprocess.Popen(["sleep", "30"])
+    try:
+        assert not stop_playing() and playing() == []
+        PIDFILE.write_text(f"{kids[0].pid}\n{other.pid}\n{kids[1].pid}\n")
+        assert playing() == [k.pid for k in kids]
+        # speak()。順番に読むなら、動いている子プロセスを残して後ろに足し、最後のものの pidfd を渡す
+        from types import SimpleNamespace  # demo でだけ使う
+        from unittest import mock  # demo でだけ使う
+
+        seen = []
+
+        def popen(args, **kw):
+            fds = [int(a.removeprefix(AFTER)) for a in args if a.startswith(AFTER)]
+            assert kw["pass_fds"] == tuple(fds), (args, kw)
+            for fd in fds:  # 渡す pidfd が指すプロセス
+                info = Path(f"/proc/self/fdinfo/{fd}").read_text()
+                seen.append(int(re.search(r"^Pid:\s*(\d+)", info, re.M)[1]))
+            return SimpleNamespace(pid=4194999)
+
+        with mock.patch.object(subprocess, "Popen", popen):
+            speak("後。", queued=True)
+            assert seen == [kids[1].pid] and PIDFILE.read_text() == f"{kids[0].pid}\n{kids[1].pid}\n4194999\n"
+            PIDFILE.write_text(f"{kids[0].pid}\n{kids[1].pid}\n")
+            speak("後。")
+            assert seen == [kids[1].pid] and PIDFILE.read_text() == "4194999\n"
+        PIDFILE.write_text(f"{kids[0].pid}\n{other.pid}\n{kids[1].pid}\n")
+        assert stop_playing() and not PIDFILE.exists()
+        assert [k.wait(5) for k in kids] == [-signal.SIGTERM] * 2 and other.poll() is None
+        PIDFILE.write_text("x\n")
+        assert playing() == []
+        switch(tmp / "c" / "queue", "on")
+        assert (tmp / "c" / "queue").exists()
+        switch(tmp / "c" / "queue", "off")
+        switch(tmp / "c" / "queue", "off")  # 無くても落ちない
+        assert not (tmp / "c" / "queue").exists()
+    finally:
+        for k in [*kids, other]:
+            k.kill()
+            k.wait()
+        shutil.rmtree(tmp)
+        PIDFILE = saved
     print("ok")
 
 
@@ -732,13 +839,15 @@ def main():
                 return
         except OSError:
             pass
-        stop_playing()
+        queued = QUEUE.exists()
+        if not (queued and text):
+            stop_playing()  # 空の Stop は、順番に読むモードでも全部止める
         if text:
             try:
                 LAST.write_text(text)
             except OSError:
                 pass
-            speak(text, to_summarize)
+            speak(text, to_summarize, queued)
             if not to_summarize:
                 check.record(text)  # 要約するときは子プロセスが、読む要約を記録する
     finally:
@@ -757,7 +866,7 @@ def say(text):
 
 @click.command()
 def stop():
-    """鳴っている読み上げを止める（エンジンの合成は止めない）。"""
+    """鳴っている読み上げと、順番を待っている読み上げを止める（エンジンの合成は止めない）。"""
     # フックが子プロセスを起こして PIDFILE を書き換えている途中に読まない
     try:
         lock = open(LOCK, "w")
@@ -786,14 +895,27 @@ def status(clear):
 @click.argument("state", required=False, type=click.Choice(["on", "off"]))
 def summary(state):
     """長い返答を要約して読むかを切り替える（on・off）。引数なしは今の状態を表示する。次の返答から効く。"""
-    if state == "on":
-        SUMMARY.parent.mkdir(parents=True, exist_ok=True)
-        SUMMARY.touch()
-    elif state == "off":
-        SUMMARY.unlink(missing_ok=True)
+    switch(SUMMARY, state)
     print("on" if summary_on() else "off")
     if summary_env() is not None:
         print(f"環境変数 CCSPK_SUMMARY={os.environ['CCSPK_SUMMARY']} が {SUMMARY} より優先している")
+
+
+@click.command()
+@click.argument("state", required=False, type=click.Choice(["on", "off"]))
+def queue_(state):
+    """再生中に次の文章が来たとき、前の再生を止めずに来た順に読むかを切り替える（on・off）。引数なしは今の状態を表示する。"""
+    switch(QUEUE, state)
+    print("on" if QUEUE.exists() else "off")
+
+
+def switch(path, state):
+    """on なら path を作り、off なら消す。"""
+    if state == "on":
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.touch()
+    elif state == "off":
+        path.unlink(missing_ok=True)
 
 
 if __name__ == "__main__":

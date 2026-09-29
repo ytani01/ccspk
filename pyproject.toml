@@ -2,7 +2,7 @@
 name = "ccspk"
 description = "Claude Code の返答の冒頭を、手元の VOICEVOX で読み上げるフック"
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.14"
 authors = [{ name = "Yoichi Tanibayashi", email = "yoichi@tanibayashi.jp" }]
 dependencies = [
   "click>=8.3.1",
