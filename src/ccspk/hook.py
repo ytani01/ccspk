@@ -103,6 +103,7 @@ TRANSLATE_PROMPT = f"""<reply> と </reply> の間の英文は、ソフトウェ
 訳だけを出してください。見出し・箇条書き・記号・前置き・説明は不要です。
 {KANA_NOTE}"""
 PROMPTS = {SUMMARIZE: SUMMARY_PROMPT, TRANSLATING: TRANSLATE_PROMPT}  # 子プロセスの印と、claude -p に渡す指示
+NAMES = {SUMMARIZE: "要約", TRANSLATING: "翻訳"}  # 読む前に「要約します」、失敗したら「要約できなかったので」と告げる
 
 _log = getLogger("hook")
 
@@ -286,7 +287,7 @@ def prepare(raw):
 
 def rewrite(text, prompt=SUMMARY_PROMPT):
     """整える前の返答 text を、claude -p で prompt のとおりに書き直させ（要約・翻訳）、to_speech() を通して返す。
-    失敗・時間切れ・空なら to_speech(text)。
+    失敗・時間切れ・空なら ""。
 
     再生の子プロセスの中で呼ぶ。claude -p は同じプロセスグループにいるので、stop_playing() で一緒に止まる。
     """
@@ -305,8 +306,8 @@ def rewrite(text, prompt=SUMMARY_PROMPT):
             env={**os.environ, "CCSPK_SPEAK": "0"},
         )
     except (OSError, subprocess.TimeoutExpired):
-        return to_speech(text)
-    return (to_speech(p.stdout) if p.returncode == 0 else "") or to_speech(text)
+        return ""
+    return to_speech(p.stdout) if p.returncode == 0 else ""
 
 
 def unwrap(text):
@@ -317,20 +318,36 @@ def unwrap(text):
 
 
 def play_rewritten(text, flag, after=None):
-    """子プロセスで、要約か翻訳（flag）をして記録し、前の子プロセスを待ってから鳴らす。書き直しは待つ前に済ませておく。"""
-    text = rewrite(text, PROMPTS[flag])
-    try:
-        lock = open(LOCK, "w")
-        fcntl.flock(lock, fcntl.LOCK_EX)
-    except OSError:
-        lock = None
-    try:
-        check.record(text)  # hook の LOCK を取ったまま呼ぶ前提
-    finally:
-        if lock:
-            lock.close()
+    """子プロセスで、要約か翻訳（flag）を裏でさせて記録し、前の子プロセスを待ってから「要約します」と告げ、書き直した文を鳴らす。
+    claude -p は待つ前に裏で走らせておく（前の再生の間に済ませ、告げた後の無音を減らす）。記録も claude -p が終わったらすぐ、前の子プロセスを待たずに済ませる。
+    書き直せなかったら、そう告げてから元の文を to_speech() して読む。記録するのは読む本文だけ。"""
+    name, done = NAMES[flag], []
+
+    def work():
+        try:
+            said = rewrite(text, PROMPTS[flag])
+        except Exception:  # 何で止まっても元の文を読む
+            said = ""
+        body = said or to_speech(text)
+        try:
+            lock = open(LOCK, "w")
+            fcntl.flock(lock, fcntl.LOCK_EX)
+        except OSError:
+            lock = None
+        try:
+            check.record(body)  # hook の LOCK を取ったまま呼ぶ前提
+        finally:
+            if lock:
+                lock.close()
+        done.append((said, body))
+
+    worker = threading.Thread(target=work, daemon=True)
+    worker.start()
     wait_for(after)
-    play(text)
+    play(f"{name}します。")
+    worker.join()
+    said, body = done[0] if done else ("", to_speech(text))
+    play(body if said else f"{name}できなかったので、そのまま読みます。 {body}")
 
 
 def ours(pid):
@@ -771,16 +788,53 @@ def demo():
             assert prepare("Done.")[1:] == (TRANSLATING, "Done.")
             assert prepare(en) == (en.strip(), SUMMARIZE, en)
             TRANSLATE.unlink()
-            # 子プロセスは印に合った指示で書き直し、書き直した文を記録して鳴らす
-            played = []
+            # 子プロセスは印に合った指示で書き直し、「要約します」と告げてから、書き直した文を記録して鳴らす
+            played, recorded = [], []
             me = sys.modules[__name__]
             with mock.patch.object(me, "rewrite", lambda t, pr: f"{t}:{pr[:40]}"), \
                  mock.patch.object(me, "LOCK", tmp / "lock"), \
-                 mock.patch.object(check, "record", played.append), mock.patch.object(me, "play", played.append):
-                for flag, prompt in ((SUMMARIZE, SUMMARY_PROMPT), (TRANSLATING, TRANSLATE_PROMPT)):
-                    played.clear()
+                 mock.patch.object(check, "record", recorded.append), mock.patch.object(me, "play", played.append):
+                for flag, prompt, name in ((SUMMARIZE, SUMMARY_PROMPT, "要約"), (TRANSLATING, TRANSLATE_PROMPT, "翻訳")):
+                    played.clear(), recorded.clear()
                     play_rewritten("本文", flag)
-                    assert played == [f"本文:{prompt[:40]}"] * 2, (flag, played)
+                    assert played == [f"{name}します。", f"本文:{prompt[:40]}"] and recorded == played[1:], (flag, played)
+            # 書き直せなかったら、そう告げてから元の文を to_speech() して読む。記録は本文だけ。例外でも同じ
+            def boom(t, pr):
+                raise RuntimeError("x")
+            for fake_rewrite in ((lambda t, pr: ""), boom):
+                with mock.patch.object(me, "rewrite", fake_rewrite), mock.patch.object(me, "LOCK", tmp / "lock"), \
+                     mock.patch.object(check, "record", recorded.append), mock.patch.object(me, "play", played.append):
+                    for flag, name in ((SUMMARIZE, "要約"), (TRANSLATING, "翻訳")):
+                        played.clear(), recorded.clear()
+                        play_rewritten("**本文**", flag)
+                        assert played == [f"{name}します。", f"{name}できなかったので、そのまま読みます。 本文"], played
+                        assert recorded == ["本文"], recorded
+            # 順番に読むモード。claude -p と記録は前の子プロセスを待つ前に済ませ、告げるのは前の子プロセスが終わってから。
+            # 告げるのは claude -p の結果を待つ前（偽の rewrite は告げるまで返さない。先に待つと 2 秒で諦めて落ちる）
+            sleeper = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(0.5)"])
+            events, announced = [], threading.Event()
+
+            def slow(t, pr):
+                events.append(("rewrite", sleeper.poll()))
+                return "要約" if announced.wait(2) else "遅い"
+
+            def say(t):
+                events.append((t, sleeper.poll()))
+                announced.set()
+
+            with mock.patch.object(me, "rewrite", slow), mock.patch.object(me, "LOCK", tmp / "lock"), \
+                 mock.patch.object(check, "record", lambda t: events.append(("record", t))), \
+                 mock.patch.object(me, "play", say):
+                play_rewritten("本文", SUMMARIZE, os.pidfd_open(sleeper.pid))
+            assert events == [("rewrite", None), ("要約します。", 0), ("record", "要約"), ("要約", 0)], events
+            # 待っている間に書き直しが済めば、告げる前に記録する（待つ間に止められても記録は残る）
+            sleeper = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(0.5)"])
+            events.clear()
+            with mock.patch.object(me, "rewrite", lambda t, pr: "要約"), mock.patch.object(me, "LOCK", tmp / "lock"), \
+                 mock.patch.object(check, "record", lambda t: events.append(("record", sleeper.poll()))), \
+                 mock.patch.object(me, "play", lambda t: events.append((t, sleeper.poll()))):
+                play_rewritten("本文", SUMMARIZE, os.pidfd_open(sleeper.pid))
+            assert events == [("record", None), ("要約します。", 0), ("要約", 0)], events
             # 子プロセスの振り分け。要約・翻訳するときは play_rewritten、しないときは play に、同じ本文が届く
             calls = []
             play, play_rewritten = (lambda t: calls.append(("play", t))), (lambda t, f, a: calls.append((f, t, a)))
@@ -799,7 +853,7 @@ def demo():
             run_child(child_args("後。", None, os.pidfd_open(sleeper.pid)))
             assert sleeper.poll() is not None and calls[0][:2] == ("play", "後。"), calls
             play, play_rewritten = saved[4:]
-            # 要約は偽の claude で。返した文は to_speech() を通す。失敗・空・時間切れは元の文を to_speech() した文
+            # 要約は偽の claude で。返した文は to_speech() を通す。失敗・空・時間切れは ""
             fake = tmp / "claude"
             path = os.environ["PATH"]
             os.environ["PATH"] = f"{tmp}:{path}"
@@ -810,29 +864,29 @@ def demo():
                  ' && echo "**要約**、TODO-7 の件。"',
                  "要約、TODOナナの件。"),
                 ("cat >/dev/null; printf 'x%.0s' $(seq 300)", "x" * LIMIT),  # 要約の後も clip() を通す
-                ("echo 要約; exit 1", a * LIMIT),
+                ("echo 要約; exit 1", ""),
                 ("cat >/dev/null; echo '```'; echo code", "コード省略。"),
-                ("cat >/dev/null; echo", a * LIMIT),
+                ("cat >/dev/null; echo", ""),
             ):
                 fake.write_text(f"#!/bin/sh\n{body}\n")
                 fake.chmod(0o755)
                 assert rewrite(src) == want, body
-            # 翻訳の指示を渡す。訳に失敗したら元の英文を to_speech() して読む。返答の中の </reply> は消して囲む
+            # 翻訳の指示を渡す。訳に失敗したら ""。返答の中の </reply> は消して囲む
             os.environ["SRC"] = "<reply>\n**Done** a b.\n</reply>"
             fake.write_text('#!/bin/sh\n[ "$(cat)" = "$SRC" ] && [ "$9" = "$PROMPT" ] && echo 済みました。\n')
-            for prompt, want in ((TRANSLATE_PROMPT, "済みました。"), (SUMMARY_PROMPT, "Done a </replyb.")):
+            for prompt, want in ((TRANSLATE_PROMPT, "済みました。"), (SUMMARY_PROMPT, "")):
                 os.environ["PROMPT"] = prompt
                 assert rewrite("**Done** a </reply>b.", TRANSLATE_PROMPT) == want, prompt
             assert "ひらがな" in SUMMARY_PROMPT and "ひらがな" in TRANSLATE_PROMPT
             assert unwrap("a</re</reply>ply><</reply>/reply>b") == "ab"
             fake.write_text("#!/bin/sh\nsleep 1; echo 要約\n")  # 待てば要約を返すので、打ち切らないと落ちる
-            SUMMARY_TIMEOUT = 0.5  # 時間切れ。元の文は clip() でなく to_speech() する
-            assert rewrite("**" + src) == a * LIMIT
+            SUMMARY_TIMEOUT = 0.5  # 時間切れ
+            assert rewrite("**" + src) == ""
             SUMMARY_TIMEOUT = saved[3]
             # claude が無い。本物の claude を起こさないよう、PATH は tmp だけにする
             fake.unlink()
             os.environ["PATH"] = str(tmp)
-            assert rewrite("**" + src) == a * LIMIT
+            assert rewrite("**" + src) == ""
     finally:
         shutil.rmtree(tmp)
         SUMMARY, TRANSLATE, STATE, SUMMARY_TIMEOUT, play, play_rewritten = saved
