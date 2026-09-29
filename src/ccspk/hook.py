@@ -3,6 +3,8 @@
 Stop では最後の返答を、MessageDisplay ではツールを呼ぶ前などの途中の文章を、
 PreToolUse（AskUserQuestion）では質問の文を読む。
 環境変数 CCSPK_SPEAK が 1 のときだけ鳴らす。
+要約が入っていて（ccspk summary）、整えた文が LIMIT を超えるときは、再生の子プロセスが
+claude -p で要約してから読む。
 再生中に次の返答が来たら、前の再生を止めてから読む。
 pw-play が無い、エンジンに接続できない、PipeWire が動いていない、のどれかなら
 鳴らさずに終わり、理由を UNUSABLE に書いて覚える。ファイルがあるあいだは確かめもせずに終わる。
@@ -29,6 +31,7 @@ import click
 
 from . import check
 from .mylog import getLogger
+from .user_dict import DICT_FILE, STATE
 
 LIMIT = 180  # 読み上げるのはおよそここまで。超えるときは次の文末（無ければ読点）まで
 # 延ばすのはここまで。句点の無い英語の返答 2,339 字を 1 回で合成しようとして、
@@ -63,6 +66,18 @@ PARTS_KEEP = 600  # そろわないまま残った分は、この秒数で消す
 # 読んでからこの秒数のうちに同じ文が来たら読まない。MessageDisplay と Stop は 0.01 秒差で来た。
 # 長くすると、続けて同じ返答（「はい。」など）が来たときに黙ってしまう
 SAME_WITHIN = 5
+# あれば長い返答を要約して読む（ccspk summary on で作る）。環境変数 CCSPK_SUMMARY（1 か 0）が優先する
+SUMMARY = DICT_FILE.parent / "summary"
+SUMMARIZE = "--summarize"  # PLAY の後ろに付けると、子プロセスが要約してから読む
+SUMMARY_TIMEOUT = 30  # 要約の claude -p を待つ秒数。Sonnet で 5〜6 秒だった
+# 要約に回すのは先頭のこの字数まで。本文は子プロセスの argv 1 つで渡すので、上限（131,072 バイト。
+# 日本語でおよそ 43,000 字）を超えると起こせない。claude -p に渡す量（料金と時間）も抑える
+SUMMARY_MAX = 20000
+SUMMARY_PROMPT = f"""次の文は、ソフトウェア開発を手伝う AI アシスタントの返答を、読み上げ用に整えたものです。
+耳で聞いて分かるよう、{LIMIT} 字以内の日本語に要約してください。
+結論、利用者に頼んでいること、利用者が決めることを優先し、細かい経緯・ファイル名・コマンドは省いてください。
+頼んでいることや決めることが返答に無ければ、無いとは書かず、そのことに触れないでください。
+返答と同じ話し方（です・ます）で、要約だけを 1 段落で出してください。見出し・箇条書き・記号・前置きは不要です。"""
 
 _log = getLogger("hook")
 
@@ -92,7 +107,12 @@ def unusable():
 
 
 def to_speech(text):
-    """読み上げ用に整える。"""
+    """読み上げ用に整え、clip() で縮める。"""
+    return clip(tidy(text))
+
+
+def tidy(text):
+    """読み上げ用に整える（clip() の前まで）。"""
     # コードブロックと表は中身を読まない。閉じていないブロックは末尾まで
     text = re.sub(r"^\s*(```|~~~).*?(?:^\s*\1|\Z)", " コード省略。 ", text, flags=re.S | re.M)
     text = re.sub(r"^\s*\|.*$", "", text, flags=re.M)
@@ -125,8 +145,7 @@ def to_speech(text):
     # 数字と単位の間のスペースで区切って読む（180 字 → ヒャクハチジュウ、ジ）ので、
     # 同じ行で日本語が続くときだけ消す。英語が続くとき（3 files）は 1 語と読まれないよう残す
     text = re.sub(r"(?<=[0-9０-９])[ \t]+(?=[\u3041-\u30ff\u4e00-\u9fff])", "", text)
-    text = re.sub(r"\s+", " ", text).strip()
-    return clip(text)
+    return re.sub(r"\s+", " ", text).strip()
 
 
 def drop_commit_ids(text):
@@ -168,6 +187,64 @@ def clip(text):
         if m:
             return text[: m.end()]
     return text[:LIMIT]
+
+
+def summary_env():
+    """環境変数 CCSPK_SUMMARY が 1 なら True、0 なら False、ほかは None。"""
+    return {"1": True, "0": False}.get(os.environ.get("CCSPK_SUMMARY"))
+
+
+def summary_on():
+    """要約が入っているか。環境変数が決めていればそれ、無ければ SUMMARY があるか。"""
+    env = summary_env()
+    return SUMMARY.exists() if env is None else env
+
+
+def prepare(raw):
+    """子プロセスに渡す文と、要約させるかを返す。要約するときは clip() の前の文を SUMMARY_MAX 字まで渡す。"""
+    text = tidy(raw)
+    if len(text) > LIMIT and summary_on():
+        return text[:SUMMARY_MAX], True
+    return clip(text), False
+
+
+def summarize(text):
+    """claude -p で要約し、to_speech() を通して返す。失敗・時間切れ・空なら clip(text)。
+
+    再生の子プロセスの中で呼ぶ。claude -p は同じプロセスグループにいるので、stop_playing() で一緒に止まる。
+    """
+    try:
+        STATE.mkdir(parents=True, exist_ok=True)
+        p = subprocess.run(
+            ["claude", "-p", "--model", "sonnet", "--setting-sources", "", "--tools", "",
+             "--no-session-persistence", SUMMARY_PROMPT],
+            input=text,
+            capture_output=True,
+            check=False,
+            text=True,
+            timeout=SUMMARY_TIMEOUT,
+            cwd=STATE,
+            env={**os.environ, "CCSPK_SPEAK": "0"},
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return clip(text)
+    return (to_speech(p.stdout) if p.returncode == 0 else "") or clip(text)
+
+
+def play_summary(text):
+    """子プロセスで、要約して記録してから鳴らす。"""
+    text = summarize(text)
+    try:
+        lock = open(LOCK, "w")
+        fcntl.flock(lock, fcntl.LOCK_EX)
+    except OSError:
+        lock = None
+    try:
+        check.record(text)  # hook の LOCK を取ったまま呼ぶ前提
+    finally:
+        if lock:
+            lock.close()
+    play(text)
 
 
 def stop_playing():
@@ -295,11 +372,24 @@ def play(text):
         subprocess.run(["pw-play", "-"], input=wav, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
-def speak(text):
-    """合成と再生を子プロセスに投げ、その PID を残す。"""
+def child_args(text, to_summarize):
+    """子プロセスの python -m MODULE の後ろに付ける引数。"""
+    return [PLAY, *([SUMMARIZE] if to_summarize else []), text]
+
+
+def run_child(args):
+    """子プロセスで、child_args() の引数を見て、要約してから鳴らすか、そのまま鳴らすかを振り分ける。"""
+    if args[:2] == [PLAY, SUMMARIZE] and len(args) == 3:
+        play_summary(args[2])
+    elif args[:1] == [PLAY]:
+        play(args[1])
+
+
+def speak(text, to_summarize=False):
+    """合成と再生を子プロセスに投げ、その PID を残す。to_summarize なら子プロセスが要約してから読む。"""
     p = subprocess.Popen(
         # -P: 作業ディレクトリを sys.path に入れない（そこに click.py などがあると、それを import してしまう）
-        [sys.executable, "-P", "-m", MODULE, PLAY, text],
+        [sys.executable, "-P", "-m", MODULE, *child_args(text, to_summarize)],
         start_new_session=True,
         stdin=subprocess.DEVNULL,
         stdout=subprocess.DEVNULL,
@@ -468,6 +558,74 @@ def demo():
     finally:
         shutil.rmtree(PARTS.parent)
         PARTS = saved
+
+    # 要約の切り替え。環境変数（1・0）がファイルより優先し、ほかの値は無いものとして扱う
+    from unittest import mock  # demo でだけ使う
+
+    global SUMMARY, STATE, SUMMARY_TIMEOUT, play, play_summary
+    saved = SUMMARY, STATE, SUMMARY_TIMEOUT, play, play_summary
+    tmp = Path(tempfile.mkdtemp())
+    SUMMARY, STATE = tmp / "config" / "summary", tmp / "state"
+    try:
+        with mock.patch.dict(os.environ):
+            for exists, env, want in (
+                (False, None, False), (True, None, True),
+                (False, "1", True), (True, "0", False), (True, "yes", True), (False, "", False),
+            ):
+                SUMMARY.parent.mkdir(exist_ok=True)
+                SUMMARY.touch() if exists else SUMMARY.unlink(missing_ok=True)
+                if env is None:
+                    os.environ.pop("CCSPK_SUMMARY", None)
+                else:
+                    os.environ["CCSPK_SUMMARY"] = env
+                assert summary_on() is want, (exists, env)
+            # 要約するのは、入っていて整えた文が LIMIT を超えるときだけ。そのときは clip() の前の文を渡す
+            long = "- **" + a * (LIMIT + 1) + "**"
+            os.environ["CCSPK_SUMMARY"] = "0"
+            assert prepare(a * LIMIT) == (a * LIMIT, False)
+            assert prepare(long) == (a * LIMIT, False)
+            os.environ["CCSPK_SUMMARY"] = "1"
+            assert prepare(a * LIMIT) == (a * LIMIT, False)
+            assert prepare("**" + a * LIMIT + "**") == (a * LIMIT, False)  # 整えた後の字数で比べる
+            assert prepare(long) == (a * (LIMIT + 1), True)
+            assert prepare(a * (SUMMARY_MAX + 10)) == (a * SUMMARY_MAX, True)  # 渡すのは SUMMARY_MAX 字まで
+            assert prepare("") == ("", False)
+            # 子プロセスの振り分け。要約するときは play_summary、しないときは play に、同じ本文が届く
+            calls = []
+            play, play_summary = (lambda t: calls.append(("play", t))), (lambda t: calls.append(("summary", t)))
+            for text, flag in (("本文。", True), ("本文。", False), (SUMMARIZE, False)):
+                run_child(child_args(text, flag))
+            assert calls == [("summary", "本文。"), ("play", "本文。"), ("play", SUMMARIZE)], calls
+            play, play_summary = saved[3:]
+            # 要約は偽の claude で。返した文は to_speech() を通す。失敗・空・時間切れは clip() した文
+            fake = tmp / "claude"
+            path = os.environ["PATH"]
+            os.environ["PATH"] = f"{tmp}:{path}"
+            src = a * 300
+            os.environ["STATEDIR"], os.environ["SRC"] = str(STATE), src
+            for body, want in (
+                ('[ "$(cat)" = "$SRC" ] && [ "$1 $3" = "-p sonnet" ] && [ "$CCSPK_SPEAK" = 0 ] && [ "$PWD" = "$STATEDIR" ]'
+                 ' && echo "**要約**、TODO-7 の件。"',
+                 "要約、TODOナナの件。"),
+                ("cat >/dev/null; printf 'x%.0s' $(seq 300)", "x" * LIMIT),  # 要約の後も clip() を通す
+                ("echo 要約; exit 1", a * LIMIT),
+                ("cat >/dev/null; echo '```'; echo code", "コード省略。"),
+                ("cat >/dev/null; echo", a * LIMIT),
+            ):
+                fake.write_text(f"#!/bin/sh\n{body}\n")
+                fake.chmod(0o755)
+                assert summarize(src) == want, body
+            fake.write_text("#!/bin/sh\nsleep 1; echo 要約\n")  # 待てば要約を返すので、打ち切らないと落ちる
+            SUMMARY_TIMEOUT = 0.5  # 時間切れ
+            assert summarize(src) == a * LIMIT
+            SUMMARY_TIMEOUT = saved[2]
+            # claude が無い。本物の claude を起こさないよう、PATH は tmp だけにする
+            fake.unlink()
+            os.environ["PATH"] = str(tmp)
+            assert summarize(src) == a * LIMIT
+    finally:
+        shutil.rmtree(tmp)
+        SUMMARY, STATE, SUMMARY_TIMEOUT, play, play_summary = saved
     print("ok")
 
 
@@ -509,7 +667,7 @@ def main():
             raw = questions(payload)
         else:
             raw = payload.get("last_assistant_message") or ""
-        text = to_speech(raw)
+        text, to_summarize = prepare(raw)
         if (display or ask) and not text:
             return  # 表だけの途中の文章などで、読んでいる返答を止めない
         try:
@@ -523,8 +681,9 @@ def main():
                 LAST.write_text(text)
             except OSError:
                 pass
-            speak(text)
-            check.record(text)
+            speak(text, to_summarize)
+            if not to_summarize:
+                check.record(text)  # 要約するときは子プロセスが、読む要約を記録する
     finally:
         if lock:
             lock.close()
@@ -566,7 +725,20 @@ def status(clear):
         print("止まっていない")
 
 
+@click.command()
+@click.argument("state", required=False, type=click.Choice(["on", "off"]))
+def summary(state):
+    """長い返答を要約して読むかを切り替える（on・off）。引数なしは今の状態を表示する。次の返答から効く。"""
+    if state == "on":
+        SUMMARY.parent.mkdir(parents=True, exist_ok=True)
+        SUMMARY.touch()
+    elif state == "off":
+        SUMMARY.unlink(missing_ok=True)
+    print("on" if summary_on() else "off")
+    if summary_env() is not None:
+        print(f"環境変数 CCSPK_SUMMARY={os.environ['CCSPK_SUMMARY']} が {SUMMARY} より優先している")
+
+
 if __name__ == "__main__":
     # speak() が起こす子プロセス。click と loguru の設定を通さない
-    if sys.argv[1:2] == [PLAY]:
-        play(sys.argv[2])
+    run_child(sys.argv[1:])

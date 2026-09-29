@@ -1,7 +1,7 @@
 # 開発者向け
 
 依存は click、loguru、sudachipy と sudachidict_core（自動の点検で単語を切り出す）、VOICEVOX のエンジン
-（`127.0.0.1:50021`）、`pw-play`、`claude`（自動の点検で読みを判定させる）。
+（`127.0.0.1:50021`）、`pw-play`、`claude`（自動の点検で読みを判定させる。要約を入れたときは長い返答の要約にも使う）。
 読み上げの範囲や切り方など、利用者から見た動きは下の「2. 動き方」、インストールと辞書は
 [UsersGuide](UsersGuide.md) にある。
 
@@ -13,7 +13,7 @@
 |---|---|
 | `pyproject.toml` | コマンド `ccspk` の定義（`uv tool install` で入れる） |
 | `src/ccspk/cli.py` | サブコマンドをまとめる。`ccspk test` もここにある |
-| `src/ccspk/hook.py` | `ccspk hook`・`say`・`stop`・`status`。Stop・MessageDisplay・PreToolUse フックとして、返答の冒頭と質問の文を VOICEVOX で読み上げる |
+| `src/ccspk/hook.py` | `ccspk hook`・`say`・`stop`・`status`・`summary`。Stop・MessageDisplay・PreToolUse フックとして、返答の冒頭と質問の文を VOICEVOX で読み上げる |
 | `src/ccspk/user_dict.py` | `ccspk dict`。VOICEVOX のユーザー辞書を操作する |
 | `src/ccspk/check.py` | 読み間違いの自動の点検（`python -m ccspk.check`）。フックが読み上げた文を記録し、Stop で裏で起こす（[「3.8 自動の点検」](#38-自動の点検)） |
 | `src/ccspk/__init__.py` | `__version__`（`--version` で出す版） |
@@ -29,6 +29,9 @@
   切らないよう、180 字目から 240 字目までで最初の文末まで読む。文末が無ければ
   読点まで、それも無ければ 180 字で切る。コードブロックは
   「コード省略」に置き換え、表・Markdown の記号・リンクの URL は消す
+- 要約を入れたとき（`ccspk summary on`、または `CCSPK_SUMMARY=1`）は、整えた文が 180 字を超えたら、
+  切らずに `claude -p --model sonnet` で要約させ、要約を整えて上と同じく切ってから読む。イベントは問わない。
+  最初の音が要約の分（5〜6 秒）遅れる。要約に失敗したら、知らせずに切った文を読む
 - 読み間違いを減らすため、辞書で直せないもの（記号や数字など）は置き換え、単語の読みはエンジンの辞書で直す。どちらも
   [UsersGuide.md](UsersGuide.md#2-読み上げの辞書) にある
 - 文ごとに合成し、1 文目ができたらすぐ鳴らす。2 文目以降は鳴らしている
@@ -71,7 +74,7 @@ MessageDisplay フックとして、`AskUserQuestion` を呼ぶ直前に PreTool
 先に届くこともある。PreToolUse なら `tool_name` と `tool_input.questions[].question`。
 `agent_id` があるとき（サブエージェント）は読まない。
 
-`hook.py` にはサブコマンドが 4 つある。
+`hook.py` にはサブコマンドが 5 つある。
 
 | サブコマンド | 動き |
 |---|---|
@@ -79,6 +82,7 @@ MessageDisplay フックとして、`AskUserQuestion` を呼ぶ直前に PreTool
 | `say <本文>` | 合成と再生だけをする（`play()`）。子プロセスと同じ動き |
 | `stop` | `LOCK` を取ってから、鳴っている再生を止める（`stop_playing()`）。止めたら「止めた」、鳴っていなければ「鳴っていない」と表示する。エンジンの合成は止めない |
 | `status [--clear]` | `UNUSABLE` があれば理由を表示する。`--clear` なら消す |
+| `summary [on\|off]` | `SUMMARY` を作る・消す。その後で `summary_on()` の結果を `on`・`off` で表示し、`CCSPK_SUMMARY` が決めていればそのことを添える |
 
 `hook.py` の `main()`（`ccspk hook`）は、フックとして次の順に進む。
 どこかで条件を満たさなければ、そこで終わる。
@@ -92,20 +96,39 @@ MessageDisplay フックとして、`AskUserQuestion` を呼ぶ直前に PreTool
    そろっていなければ終わる。そろったらつなぎ、置いた分を消す。`PARTS_KEEP` 秒より古い分もここで消す。
    PreToolUse なら、`questions()` で質問の文を改行でつなぐ。`tool_name` が
    `AskUserQuestion` でなければ空にする
-7. `to_speech()` で読み上げる文に整える。MessageDisplay・PreToolUse で空になったら終わる
-8. 整えた文が `LAST`（最後に読んだ文）と同じで、書いてから `SAME_WITHIN` 秒のうちなら終わる
+7. `prepare()` で読み上げる文に整える。`tidy()` で整えた文が `LIMIT` を超え、`summary_on()` が真なら、
+   その文を先頭 `SUMMARY_MAX` 字まで切り、要約させる印を付けて渡す。それ以外は `clip()` で切る（`to_speech()` と同じ）。
+   MessageDisplay・PreToolUse で空になったら終わる
+8. 整えた文（要約させるなら要約の前の文）が `LAST`（最後に読んだ文）と同じで、書いてから `SAME_WITHIN` 秒のうちなら終わる
 9. `stop_playing()` で前の再生を止める
-10. 文が空でなければ、`LAST` に書き、`speak()` で子プロセスを起こし、その PID を `PIDFILE` に書く
+10. 文が空でなければ、`LAST` に書き、`speak()` で子プロセスを起こし、その PID を `PIDFILE` に書く。
+    要約させないときは、`check.record()` で文を記録する（[「3.8 自動の点検」](#38-自動の点検)）
 
 フックはここで終わり、Claude Code を待たせない（登録の `timeout` は 5 秒）。
 合成と再生は子プロセスが受け持つ。
 
 ### 3.2 子プロセス
 
-`speak()` は、`python -P -m ccspk.hook --play <本文>` で子プロセスを起こす。
+`speak()` は、`python -P -m ccspk.hook --play <本文>` で子プロセスを起こす（引数は `child_args()` が作り、
+子プロセスでは `run_child()` が振り分ける）。
 `-P` は、Claude Code の作業ディレクトリを `sys.path` に入れないため。
 `start_new_session=True` で新しいセッション（兼プロセスグループ）にするので、
 子プロセスが起こした `pw-play` まで、グループごと止められる。
+
+要約させるときは `python -P -m ccspk.hook --play --summarize <本文>` で起こし（`SUMMARIZE`）、
+子プロセスは `play_summary()` で次の順に進む。
+
+1. `summarize()` で、`claude -p --model sonnet --setting-sources "" --tools "" --no-session-persistence SUMMARY_PROMPT` の
+   標準入力に本文を渡す。`cwd` は `STATE`（`user_dict.py`）、環境変数は `CCSPK_SPEAK=0` を足す。
+   `claude -p` は同じプロセスグループにいるので、`stop_playing()` で一緒に止まる
+2. 終了コードが 0 なら、出力を `to_speech()` で整えて切る（要約は `LIMIT` を少し超えることがある）。
+   `SUMMARY_TIMEOUT` 秒で終わらない、終了コードが 0 でない、整えると空、起こせない（`OSError`）のどれかなら、
+   本文を `clip()` で切る。失敗は知らせない
+3. hook の `LOCK` を取り、読む文を `check.record()` で記録する
+4. `play()` で鳴らす
+
+`SUMMARY_PROMPT` の字数は `LIMIT` から作る。要約の切り替えは `summary_on()` が決める。
+環境変数 `CCSPK_SUMMARY` が `1` なら真、`0` なら偽（`summary_env()`）、ほかの値や無いときは `SUMMARY` があるか。
 
 `play()` は、合成するスレッドと鳴らすループに分かれる。
 
@@ -155,7 +178,9 @@ MessageDisplay フックとして、`AskUserQuestion` を呼ぶ直前に PreTool
 
 | 関数 | すること |
 |---|---|
-| `to_speech()` | コードブロックを「コード省略」に置き換え、Markdown の記号・表・URL を除き、`drop_commit_ids()` でコミット ID を消し、記号と数字の読みを整え、最後に `clip()` を通す |
+| `to_speech()` | `tidy()` で整え、`clip()` で切る |
+| `tidy()` | コードブロックを「コード省略」に置き換え、Markdown の記号・表・URL を除き、`drop_commit_ids()` でコミット ID を消し、記号と数字の読みを整える |
+| `prepare()` | フックが子プロセスに渡す文と、要約させるかを返す。要約させるときは `clip()` を通さず、`SUMMARY_MAX` 字までにする |
 | `drop_commit_ids()` | `` ` `` で囲んだコミット ID を消す。消すと文が壊れるものは残す |
 | `clip()` | `LIMIT` 字を超えるときに、文の途中で切らないように縮める |
 | `sentences()` | 文末（`ENDS`）の後ろで文に分ける |
@@ -182,6 +207,11 @@ MessageDisplay フックとして、`AskUserQuestion` を呼ぶ直前に PreTool
 | `CUT_MIN` | 8 | これより手前では切らない |
 | `SPACE_WITHIN` | 30 | この字数までに `CUT` が無いときだけ、スペースで切る |
 | `DIGITS` | `ゼロ イチ ニー …` | `TODO-` の番号を桁ごとに読むカナ（0〜9） |
+| `SUMMARIZE` | `--summarize` | `PLAY` の後ろに付けると、子プロセスが要約してから読む |
+| `SUMMARY` | `~/.config/ccspk/summary` | あれば要約が入。`user_dict.DICT_FILE` と同じディレクトリ（`$XDG_CONFIG_HOME` に従う） |
+| `SUMMARY_TIMEOUT` | 30 | 要約の `claude -p` を待つ秒数 |
+| `SUMMARY_MAX` | 20000 | 要約に回すのは先頭のこの字数まで。本文は argv 1 つで渡すので、上限（131,072 バイト、日本語でおよそ 43,000 字）を超えると子プロセスを起こせない。`claude -p` に渡す量も抑える |
+| `SUMMARY_PROMPT` | 文 | 要約の `claude -p` に渡す指示 |
 | `PARTS_KEEP` | 600 | そろわないまま残った MessageDisplay の分は、この秒数で消す |
 | `SAME_WITHIN` | 5 | 読んでからこの秒数のうちに同じ文が来たら読まない。長くすると、続けて同じ返答（「はい。」など）が来たときに黙ってしまう |
 
@@ -193,7 +223,9 @@ MessageDisplay フックとして、`AskUserQuestion` を呼ぶ直前に PreTool
 sudachipy は読まない（最初の音を遅らせない）。
 
 - `record()` — `speak()` の後で、鳴らす文（`to_speech()` の結果）を `SPOKEN` に追記する。
-  イベントは問わない。フックの `LOCK` を取ったまま呼ぶので、切り詰めがほかのフックとぶつからない
+  イベントは問わない。フックの `LOCK` を取ったまま呼ぶので、切り詰めがほかのフックとぶつからない。
+  要約させるときはフックでは呼ばず、再生の子プロセスが要約の後で、`LOCK` を取って読む文（要約、失敗したら切った文）を
+  記録する（[「3.2 子プロセス」](#32-子プロセス)）。記録は Stop より後になるので、点検は次の Stop に回る
 - `after_stop()` — Stop のとき（`MessageDisplay` でも `PreToolUse` でもない）、`LOCK` を放した後で呼ぶ。
   同じ文を 2 度読まないで返るときも呼ぶ（`MessageDisplay` が記録した分があるため）。
   `FAILED` があれば中身を `{"systemMessage": …}` で標準出力に出して消す。`pending()` が真なら
@@ -255,7 +287,9 @@ sudachipy は読まない（最初の音を遅らせない）。
 
 hook の `demo()` は、整形と分割（`to_speech`、`drop_commit_ids`、`clip`、`sentences`、`split_first`、
 `chunks`、`squeeze`）、PreToolUse の質問の文を取り出す `questions()`、MessageDisplay の分をつなぐ
-`assemble()`（一時ディレクトリで）を `assert` で確かめている（pytest ではない）。
+`assemble()`（一時ディレクトリで）、要約の切り替え（`summary_on`）と要約させるかの分かれ目（`prepare`）、
+子プロセスの振り分け（`child_args`・`run_child`）、要約（`summarize`。`PATH` の先頭に置いた偽の `claude` で、失敗・空・時間切れも。
+`claude` が無い例は `PATH` を一時ディレクトリだけにし、本物を起こさない）を `assert` で確かめている（pytest ではない）。
 dict の `demo()` は、アクセントの位置の決め方（`accent_of`）と、全角から半角へ戻す `halfwidth` を確かめている。
 check の `demo()` は、単語の切り出し（`extract`）、`claude` の返答の読み取り（`parse`）、点検を起こす条件
 （`pending`）と `SPOKEN` の切り詰め（`record`）を確かめている（後の 2 つは一時ディレクトリで）。
@@ -281,6 +315,8 @@ uv run ccspk test   # hook・dict・check の demo() を全部
 読み上げた文の記録（[「3.8 自動の点検」](#38-自動の点検)）が本物に混ざらないよう、`XDG_STATE_HOME` も
 一時ディレクトリに向ける。Stop として渡すと、裏で点検が起こり本物の `claude -p` を呼ぶ（料金がかかる）。
 避けるなら、`PATH` の先頭に決まった行を返すだけの偽の `claude` を置く。
+要約が入っていると（`ccspk summary`）、180 字を超える文でも本物の `claude -p` を呼ぶ。
+`CCSPK_SUMMARY=0` を付けるか、同じく偽の `claude` を置く。
 
 ```sh
 tmp=$(mktemp -d)

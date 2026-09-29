@@ -38,7 +38,7 @@ unit ファイルのパスを揃えて書き換え、`systemctl --user daemon-re
 （unit ファイルの `ExecStartPost`。`~/.local/bin/ccspk` を使うので、先に `ccspk` を
 インストールしておく）。詳しくは [辞書のファイル](#21-辞書のファイル)。
 
-整形が正しく動くかは [`ccspk test`](#36-ccspk-test) で確認できる。
+整形が正しく動くかは [`ccspk test`](#37-ccspk-test) で確認できる。
 
 ### 1.2 Claude Code の設定
 
@@ -111,10 +111,16 @@ Claude Code で Esc を押して返答を中断しても、読み上げは止ま
 2. 原因を取り除く
 3. `ccspk status --clear` でファイルを消す。次の返答から、フックがまた確認する
 
+### 1.6 長い返答を要約して読む
+
+読み上げるのは整えた文の冒頭 180 字ほどで、超える分は読まない。`ccspk summary on` にすると、
+180 字を超える返答は、Claude（Sonnet）に 180 字ほどに要約させてから読む（[`ccspk summary`](#36-ccspk-summary)）。
+既定は切ってある。要約する返答では、最初の音が 5〜6 秒ほど遅れ、1 回に 1〜1.5 セントほどかかる。
+
 ## 2. 読み上げの辞書
 
 返答の読み上げで読み間違える単語は、VOICEVOX のエンジンのユーザー辞書で読みを直す。
-操作はどれも [`ccspk dict`](#37-ccspk-dict) のサブコマンドで行う。
+操作はどれも [`ccspk dict`](#38-ccspk-dict) のサブコマンドで行う。
 
 1. `ccspk dict kana` で、エンジンが今どう読むかを確認する
 2. `ccspk dict add` で表記と読みを登録する。登録後の読みが表示される
@@ -167,7 +173,7 @@ ccspk dict add README リードミー --speak
 ### 2.3 読み間違いの自動の点検
 
 読み上げた文から単語を切り出し、読み間違いを Claude（Opus）に判定させて、誤りは辞書に登録する。
-確認は挟まない。登録した単語は [`ccspk dict auto`](#312-ccspk-dict-auto) で見直し、まとめて消せる。
+確認は挟まない。登録した単語は [`ccspk dict auto`](#313-ccspk-dict-auto) で見直し、まとめて消せる。
 
 - 点検するのは、英字を含む単語（`README.md`・`v1.2` など。1 字は除く）と、漢字を含む 2 字以上の名詞
   （`優先度`・`作業中` など）。動詞の活用形（`試さ`）と 1 字の漢字（`行`）は、文によって読みが
@@ -190,7 +196,7 @@ ccspk dict add README リードミー --speak
 
 | ファイル | 中身 |
 |---|---|
-| `spoken.txt` | 読み上げた文（整えた後）。1 行 1 文。64 KiB を超えたら古いほうの半分を捨てる |
+| `spoken.txt` | 読み上げた文（整えた後。要約したときは要約）。1 行 1 文。64 KiB を超えたら古いほうの半分を捨てる |
 | `checked.txt` | 点検に回した単語。1 行 1 単語。誤りでなかった単語も入る。自動で登録した単語を消しても、ここに残るので登録し直さない |
 | `added.tsv` | 自動で登録した単語。日時・表記・正しい読み・エンジンの元の読みをタブで区切る |
 | `failed.txt` | 点検が失敗した理由。次の返答で知らせて消す |
@@ -237,6 +243,9 @@ Claude Code の Stop・MessageDisplay・PreToolUse フックとして動く。�
 
 合成と再生は子プロセスに任せ、すぐに終わる。読み上げの途中で次の返答が来たら、
 前の読み上げを止めてから読む。
+要約が入っていて（[`ccspk summary`](#36-ccspk-summary)）、整えた文が 180 字を超えるときは、
+子プロセスが要約してから読む（要約させるのは先頭 20,000 字まで）。要約に失敗したとき（`claude` が無い・
+終了コードが 0 でない・出力が空か整えると空・30 秒で終わらない）は、知らせずに冒頭 180 字ほどを読む。
 
 読み上げた文は記録し、Stop では[読み間違いの自動の点検](#23-読み間違いの自動の点検)を裏で起こす。
 前の点検が失敗していれば、その理由を `systemMessage` で Claude Code の画面に出す。
@@ -352,7 +361,53 @@ $ ccspk status
 止まっていない
 ```
 
-### 3.6 ccspk test
+### 3.6 ccspk summary
+
+```
+ccspk summary [on|off]
+```
+
+**説明**
+
+180 字を超える返答を要約して読むか（[1.6](#16-長い返答を要約して読む)）を切り替える。
+`on` で入れ、`off` で切り、切り替えた後の状態を表示する。引数が無ければ今の状態を `on` か `off` で表示する。
+次の返答から効く。
+
+要約は `claude -p --model sonnet` で行う。要約する返答では、最初の音が 5〜6 秒ほど遅れ、
+1 回に 1〜1.5 セントほどかかる。
+
+環境変数 `CCSPK_SUMMARY` が `1` なら入、`0` なら切で、ファイルより優先する（ほかの値は無いものとして扱う）。
+フックに届く環境変数は `~/.claude/settings.json` の `env` から来るので、このコマンドでは変えられない。
+いつもの切り替えはこのコマンドで行い、環境変数は `env` に書いて一時的に切り替えるのに使う。
+このコマンドが見るのは、コマンドを打ったシェルの環境変数だけで、`settings.json` の `env` に書いた値は表示に出ない
+（`on` と表示されても、`env` に `CCSPK_SUMMARY=0` があればフックは要約しない）。
+シェルの環境変数で決まっているときは、そのことを 1 行添えて表示する。
+
+**引数**
+
+- `on` — 入れる
+- `off` — 切る
+
+**終了ステータス**
+
+- `0` — 成功
+- `2` — 引数の誤り
+
+**ファイル**
+
+- `~/.config/ccspk/summary` — あれば入（`$XDG_CONFIG_HOME` があれば `$XDG_CONFIG_HOME/ccspk/summary`）。中身は見ない
+
+**例**
+
+```console
+$ ccspk summary on
+on
+$ CCSPK_SUMMARY=0 ccspk summary
+off
+環境変数 CCSPK_SUMMARY=0 が /home/user/.config/ccspk/summary より優先している
+```
+
+### 3.7 ccspk test
 
 ```
 ccspk test
@@ -377,7 +432,7 @@ ok
 ok
 ```
 
-### 3.7 ccspk dict
+### 3.8 ccspk dict
 
 ```
 ccspk dict COMMAND [ARGS]...
@@ -390,7 +445,7 @@ VOICEVOX のエンジンのユーザー辞書を操作する。どのサブコ�
 `dict add`・`dict remove`・`dict import`・`dict auto --remove` は、成功すると、エンジンの辞書を
 [辞書のファイル](#21-辞書のファイル)へ書き出し、「書き出した: パス」と表示する。
 
-### 3.8 ccspk dict kana
+### 3.9 ccspk dict kana
 
 ```
 ccspk dict kana TEXT
@@ -418,7 +473,7 @@ $ ccspk dict kana 'Ponytail を使う'
 ポ'ニテイル、オ'/_ツカウ'
 ```
 
-### 3.9 ccspk dict add
+### 3.10 ccspk dict add
 
 ```
 ccspk dict add [--accent N] [--type TYPE] [--priority N] [--speak] SURFACE PRONUNCIATION
@@ -470,7 +525,7 @@ $ ccspk dict add Ponytail ポニーテール
 読み: ポニイテ'エル
 ```
 
-### 3.10 ccspk dict list
+### 3.11 ccspk dict list
 
 ```
 ccspk dict list
@@ -496,7 +551,7 @@ e8587f70-4e27-4017-aa5c-7c5bfdf4251f  README  リードミー  1  5
 …
 ```
 
-### 3.11 ccspk dict remove
+### 3.12 ccspk dict remove
 
 ```
 ccspk dict remove SURFACE
@@ -528,7 +583,7 @@ $ ccspk dict remove Ponytail
 書き出した: /home/user/.config/ccspk/user_dict.json
 ```
 
-### 3.12 ccspk dict auto
+### 3.13 ccspk dict auto
 
 ```
 ccspk dict auto [--remove]
@@ -538,8 +593,8 @@ ccspk dict auto [--remove]
 
 [自動の点検](#23-読み間違いの自動の点検)で登録した単語を、登録した順に 1 単語 1 行で一覧する
 （日時・表記・正しい読み・エンジンの元の読み）。無ければ「自動で登録した単語は無い」と表示する。
-1 つずつ消すなら [`ccspk dict remove`](#311-ccspk-dict-remove)、読みを直すなら
-[`ccspk dict add`](#39-ccspk-dict-add) を使う。どちらも、その単語を一覧から外す。
+1 つずつ消すなら [`ccspk dict remove`](#312-ccspk-dict-remove)、読みを直すなら
+[`ccspk dict add`](#310-ccspk-dict-add) を使う。どちらも、その単語を一覧から外す。
 
 **オプション**
 
@@ -567,7 +622,7 @@ $ ccspk dict auto --remove
 書き出した: /home/user/.config/ccspk/user_dict.json
 ```
 
-### 3.13 ccspk dict export
+### 3.14 ccspk dict export
 
 ```
 ccspk dict export [FILE]
@@ -593,7 +648,7 @@ ccspk dict export [FILE]
 ccspk dict export backup.json
 ```
 
-### 3.14 ccspk dict import
+### 3.15 ccspk dict import
 
 ```
 ccspk dict import [FILE]
