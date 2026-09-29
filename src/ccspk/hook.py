@@ -221,8 +221,11 @@ def end_lines(text):
 
 def drop_commit_ids(text):
     """`0b7c291` のように ` で囲んだ 16 進 7 桁（`596eeac..4cbdc8c` も）をコミット ID と見て消す。
-    8 桁はセッション ID などなので含めない。消すと文が壊れるもの（`fd36df8` にタグを付けた）は残す。"""
+    カッコの中なら ` の無いもの（（fd93278））も見る。8 桁はセッション ID などなので含めない。消すと文が壊れるもの（`fd36df8` にタグを付けた）は残す。"""
     cid = r"`[0-9a-f]{7}(?:\.\.[0-9a-f]{7})?`"
+    # カッコの中だけは ` の無いもの（（fd93278））も ID と見る。外は英単語（deadbee）と見分けられないので見ない。
+    # 関数の呼び出し（f(abc1234)・range(1000000)）は見ない
+    pid = rf"(?:{cid}|(?<![0-9A-Za-z_.]\()[0-9a-f]{{7}}(?:\.\.[0-9a-f]{{7}})?)"
     # ID のほかに中身が無い文は、文ごと消す（コミットは `d774e35` です。 / 最新のコミット: `a1a9b44`）。
     # 「、」でつながる文は中身があるので残す
     text = re.sub(
@@ -230,8 +233,8 @@ def drop_commit_ids(text):
         "", text, flags=re.M,
     )
     # （`0b7c291`）・（`37c1c3b`、`6e985ac`）はカッコごと、（`773c552`、push はしていません）は ID だけ
-    text = re.sub(rf"[ \t]*[（(][ \t]*{cid}(?:[ \t]*[、,][ \t]*{cid})*[ \t]*[）)]", "", text)
-    text = re.sub(rf"(?<=[（(])[ \t]*{cid}[ \t]*[、,。][ \t]*", "", text)
+    text = re.sub(rf"[ \t]*[（(][ \t]*{pid}(?:[ \t]*[、,][ \t]*{pid})*[ \t]*[）)]", "", text)
+    text = re.sub(rf"(?<=[（(])[ \t]*{pid}[ \t]*[、,。][ \t]*", "", text)
     # `b54297d` でコミットしました → コミットしました
     text = re.sub(rf"[ \t]*{cid}[ \t]*(?:で|に|として)[ \t]*(?=コミット)", "", text)
     # 件名が続くもの（`343f827` feat(bin): … / `eb0763a feat(ghostty): …`）は件名だけ読む
@@ -648,6 +651,12 @@ def demo():
     assert to_speech("辞書を `960ac07` でコミットし、master に `44735a6` にコミットした") == (
         "辞書をコミットし、master にコミットした")  # 前のスペースも消す
     assert to_speech("`abc1234`、`def5678` を push した") == "abc1234、def5678を push した"  # カッコの外は残す
+    # カッコの中は ` の無いものも消す。外と 8 桁は残す
+    assert to_speech("済み（fd93278）で、(fd93278) も（fd93278、push はしていません）（fd93278、2cdfe32）。") == (
+        "済みで、 も（push はしていません）。")
+    assert to_speech("fd93278 を見る（fd93278a）") == "fd93278を見る（fd93278a）"
+    assert to_speech("push した（fd93278..2cdfe32）。") == "push した。"
+    assert to_speech("f(abc1234) と range(1000000)") == "f(abc1234) と range(1000000)"
     assert to_speech("- `343f827` feat(bin): hook の設定\n- 最新は `f428514 feat(docs): 振り分ける`") == (
         "feat(bin): hook の設定。 最新は feat(docs): 振り分ける")
     # ID のほかに中身が無い文は文ごと消す
@@ -663,8 +672,8 @@ def demo():
         "origin/master は 7a526e0（TODOゼロゼロロクのコミット）を指していて")
     assert to_speech("`a1a9b44` より前の 5 件。`88ef11d` の記録どおり") == "a1a9b44より前の 5件。88ef11d の記録どおり"
     assert to_speech("`a5216c7` main と同じ") == "a5216c7 main と同じ"  # 件名の形でなければ読む
-    # 8 桁・大文字・` で囲まないものは ID と見ない
-    assert to_speech("（`a1b2c3d4`）（`6E985AC`）（6e985ac）") == "（a1b2c3d4）（6E985AC）（6e985ac）"
+    # 8 桁・大文字は ID と見ない
+    assert to_speech("（`a1b2c3d4`）（`6E985AC`）（6E985AC）") == "（a1b2c3d4）（6E985AC）（6E985AC）"
     assert sentences("直した。確かめる？ はい! 終わり") == ["直した。", "確かめる？", "はい!", "終わり"]
     assert sentences("句点なし") == ["句点なし"]
     assert sentences("") == []
