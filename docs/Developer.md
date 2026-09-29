@@ -212,7 +212,11 @@ sequenceDiagram
    本文は整える前の返答なので、囲みが崩れないよう、中の `</reply>` は `unwrap()` で消してから渡す。
    整えてから渡さないのは、コードブロックが「コード省略」になるなど、返答の形が崩れて英文と日本語が混ざるため。
    `cwd` は `STATE`（`user_dict.py`）、環境変数は `CCSPK_SPEAK=0` を足す。
-   `claude -p` は同じプロセスグループにいるので、`stop_playing()` で一緒に止まる
+   `claude -p` は同じプロセスグループにいるので、`stop_playing()` で一緒に止まる。
+   この `claude -p` で読み上げが起きないのは、`--setting-sources ""` で `settings.json` を読ませず、フックが登録されないから。
+   `CCSPK_SPEAK=0` は念のためで、これだけでは止まらない。`settings.json` を読む `claude -p` では、`settings.json` の `env` が
+   環境変数を上書きして `1` に戻す（利用者向けの止め方は `docs/UsersGuide.md` の「1.3 読み上げを無効にする」）。
+   点検の `claude -p`（`check.py`）も同じ
    終了コードが 0 なら、出力を `to_speech()` で整えて切って返す（要約は `LIMIT` を少し超えることがある。訳は長い英文なら超える）。
    `SUMMARY_TIMEOUT` 秒で終わらない、終了コードが 0 でない、整えると空、起こせない（`OSError`）のどれかなら `""` を返す
 2. 同じスレッドで、`""` か例外なら本文を `to_speech()` で整えて切った文を読む文にし、hook の `LOCK` を取って

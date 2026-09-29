@@ -114,6 +114,16 @@ unit ファイルのパスを揃えて書き換え、`systemctl --user daemon-re
 `env` の `CCSPK_SPEAK` の行を消す。フックの登録は残してよい
 （何もせずに終わる）。[読み間違いの自動の点検](#23-読み間違いの自動の点検)も止まる。
 
+`claude -p` で子プロセスの Claude Code を起こすとき、その子プロセスの読み上げだけを止めるには、
+`--settings` で `env` を上書きする。
+
+```sh
+claude -p --settings '{"env":{"CCSPK_SPEAK":"0"}}' '…'
+```
+
+環境変数で `CCSPK_SPEAK=0 claude -p '…'` と渡しても止まらない。子プロセスは `settings.json` の `env` で
+環境変数を上書きするので、中では `1` のままになる。
+
 ### 1.4 鳴っている読み上げを止める
 
 Claude Code で Esc を押して返答を中断しても、読み上げは止まらない。止めるときは
