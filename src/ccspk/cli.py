@@ -1,4 +1,4 @@
-"""ccspk のエントリポイント。サブコマンド hook・say・stop・status・summary・queue・translate・speaker・test・dict をまとめる。"""
+"""ccspk のエントリポイント。サブコマンド hook・say・stop・status・summary・queue・translate・speaker・volume・test・dict をまとめる。"""
 
 import click
 
@@ -10,7 +10,7 @@ from .hook import main as hook
 from .hook import queue_, say, status, stop, summary, translate
 from .mylog import getLogger, loggerInit
 from .user_dict import demo as dict_demo
-from .user_dict import dict_group, speaker_
+from .user_dict import dict_group, speaker_, volume_
 
 _log = getLogger("main")
 
@@ -39,6 +39,7 @@ cli.add_command(summary, name="summary")
 cli.add_command(queue_, name="queue")
 cli.add_command(translate, name="translate")
 cli.add_command(speaker_, name="speaker")
+cli.add_command(volume_, name="volume")
 cli.add_command(dict_group, name="dict")
 
 

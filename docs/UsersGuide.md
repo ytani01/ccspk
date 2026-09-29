@@ -55,7 +55,7 @@ unit ファイルのパスを揃えて書き換え、`systemctl --user daemon-re
 （unit ファイルの `ExecStartPost`。`~/.local/bin/ccspk` を使うので、先に `ccspk` を
 インストールしておく）。詳しくは [辞書のファイル](#21-辞書のファイル)。
 
-整形が正しく動くかは [`ccspk test`](#310-ccspk-test) で確認できる。
+整形が正しく動くかは [`ccspk test`](#311-ccspk-test) で確認できる。
 
 ### 1.2 Claude Code の設定
 
@@ -152,10 +152,15 @@ Claude（Sonnet）に日本語へ訳させてから読む（[`ccspk translate`](
 読み上げの話者は、既定では夜語トバリ（明るい、119）。`ccspk speaker --list` でエンジンの話者を一覧し、
 `ccspk speaker 3` か `ccspk speaker ずんだもん ノーマル` のように決める（[`ccspk speaker`](#39-ccspk-speaker)）。
 
+### 1.10 音量を変える
+
+システムの音量とは別に、読み上げの音量だけを `ccspk volume 0.6` のように 0〜1.0 で決められる
+（[`ccspk volume`](#310-ccspk-volume)）。既定は 1.0。
+
 ## 2. 読み上げの辞書
 
 返答の読み上げで読み間違える単語は、VOICEVOX のエンジンのユーザー辞書で読みを直す。
-操作はどれも [`ccspk dict`](#311-ccspk-dict) のサブコマンドで行う。
+操作はどれも [`ccspk dict`](#312-ccspk-dict) のサブコマンドで行う。
 
 1. `ccspk dict kana` で、エンジンが今どう読むかを確認する
 2. `ccspk dict add` で表記と読みを登録する。登録後の読みが表示される
@@ -210,7 +215,7 @@ ccspk dict add README リードミー --speak
 ### 2.3 読み間違いの自動の点検
 
 読み上げた文から単語を切り出し、読み間違いを Claude（Opus）に判定させて、誤りは辞書に登録する。
-確認は挟まない。登録した単語は [`ccspk dict auto`](#316-ccspk-dict-auto) で見直し、まとめて消せる。
+確認は挟まない。登録した単語は [`ccspk dict auto`](#317-ccspk-dict-auto) で見直し、まとめて消せる。
 
 - 点検するのは、英字を含む単語（`README.md`・`v1.2` など。1 字は除く）と、漢字を含む 2 字以上の名詞
   （`優先度`・`作業中` など）。動詞の活用形（`試さ`）と 1 字の漢字（`行`）は、文によって読みが
@@ -541,7 +546,7 @@ ccspk speaker --list
 
 読み上げの話者（[1.9](#19-話者を変える)）を、番号か、名前とスタイルで決める。スタイルを省くと、その話者の最初のスタイル。
 決めた後の話者を `番号  名前  スタイル` で表示する。引数が無ければ今の話者を表示する。
-次の読み上げから効き、フック・[`ccspk say`](#33-ccspk-say)・[`ccspk dict add --speak`](#313-ccspk-dict-add)・
+次の読み上げから効き、フック・[`ccspk say`](#33-ccspk-say)・[`ccspk dict add --speak`](#314-ccspk-dict-add)・
 [読み間違いの自動の点検](#23-読み間違いの自動の点検)のすべてが使う。読んでいる途中で変えても、その読み上げの声は変わらない。
 
 どの使い方もエンジン（127.0.0.1:50021）に接続し、`/speakers` にある番号・名前だけを受け付ける。
@@ -584,7 +589,43 @@ $ ccspk speaker 夜語トバリ 明るい
 119  夜語トバリ  明るい
 ```
 
-### 3.10 ccspk test
+### 3.10 ccspk volume
+
+```
+ccspk volume [音量]
+```
+
+**説明**
+
+読み上げの音量（[1.10](#110-音量を変える)）を 0〜1.0 で決め、決めた後の音量を表示する。引数が無ければ今の音量を表示する。
+`pw-play --volume` に渡す値で、システムの音量とは別に効く。
+次の読み上げから効き、フック・[`ccspk say`](#33-ccspk-say)・[`ccspk dict add --speak`](#314-ccspk-dict-add) が使う。
+読んでいる途中で変えても、その読み上げの音量は変わらない。
+
+**引数**
+
+- `音量` — 0〜1.0 の数。範囲の外や数でない値は断る
+
+**終了ステータス**
+
+- `0` — 成功
+- `2` — 引数の誤り（範囲の外、または数でない）
+
+**ファイル**
+
+- `~/.config/ccspk/volume` — 決めた音量（`$XDG_CONFIG_HOME` があれば `$XDG_CONFIG_HOME/ccspk/volume`）。
+  無い・0〜1.0 の数でないときは 1.0
+
+**例**
+
+```console
+$ ccspk volume
+1.0
+$ ccspk volume 0.6
+0.6
+```
+
+### 3.11 ccspk test
 
 ```
 ccspk test
@@ -609,7 +650,7 @@ ok
 ok
 ```
 
-### 3.11 ccspk dict
+### 3.12 ccspk dict
 
 ```
 ccspk dict COMMAND [ARGS]...
@@ -622,7 +663,7 @@ VOICEVOX のエンジンのユーザー辞書を操作する。どのサブコ�
 `dict add`・`dict remove`・`dict import`・`dict auto --remove` は、成功すると、エンジンの辞書を
 [辞書のファイル](#21-辞書のファイル)へ書き出し、「書き出した: パス」と表示する。
 
-### 3.12 ccspk dict kana
+### 3.13 ccspk dict kana
 
 ```
 ccspk dict kana TEXT
@@ -650,7 +691,7 @@ $ ccspk dict kana 'Ponytail を使う'
 ポ'ニテイル、オ'/_ツカウ'
 ```
 
-### 3.13 ccspk dict add
+### 3.14 ccspk dict add
 
 ```
 ccspk dict add [--accent N] [--type TYPE] [--priority N] [--speak] SURFACE PRONUNCIATION
@@ -702,7 +743,7 @@ $ ccspk dict add Ponytail ポニーテール
 読み: ポニイテ'エル
 ```
 
-### 3.14 ccspk dict list
+### 3.15 ccspk dict list
 
 ```
 ccspk dict list
@@ -728,7 +769,7 @@ e8587f70-4e27-4017-aa5c-7c5bfdf4251f  README  リードミー  1  5
 …
 ```
 
-### 3.15 ccspk dict remove
+### 3.16 ccspk dict remove
 
 ```
 ccspk dict remove SURFACE
@@ -760,7 +801,7 @@ $ ccspk dict remove Ponytail
 書き出した: /home/user/.config/ccspk/user_dict.json
 ```
 
-### 3.16 ccspk dict auto
+### 3.17 ccspk dict auto
 
 ```
 ccspk dict auto [--remove]
@@ -770,8 +811,8 @@ ccspk dict auto [--remove]
 
 [自動の点検](#23-読み間違いの自動の点検)で登録した単語を、登録した順に 1 単語 1 行で一覧する
 （日時・表記・正しい読み・エンジンの元の読み）。無ければ「自動で登録した単語は無い」と表示する。
-1 つずつ消すなら [`ccspk dict remove`](#315-ccspk-dict-remove)、読みを直すなら
-[`ccspk dict add`](#313-ccspk-dict-add) を使う。どちらも、その単語を一覧から外す。
+1 つずつ消すなら [`ccspk dict remove`](#316-ccspk-dict-remove)、読みを直すなら
+[`ccspk dict add`](#314-ccspk-dict-add) を使う。どちらも、その単語を一覧から外す。
 
 **オプション**
 
@@ -799,7 +840,7 @@ $ ccspk dict auto --remove
 書き出した: /home/user/.config/ccspk/user_dict.json
 ```
 
-### 3.17 ccspk dict export
+### 3.18 ccspk dict export
 
 ```
 ccspk dict export [FILE]
@@ -825,7 +866,7 @@ ccspk dict export [FILE]
 ccspk dict export backup.json
 ```
 
-### 3.18 ccspk dict import
+### 3.19 ccspk dict import
 
 ```
 ccspk dict import [FILE]

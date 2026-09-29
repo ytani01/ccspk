@@ -1,30 +1,7 @@
 # TODO
 
-**残っている項目: TODO-039、TODO-048。** これまでに 48 件を決着させた。
+**残っている項目: TODO-048。** これまでに 49 件を決着させた。
 新しく足すときは「完了済み」の上に節を作る。**番号は `TODO-051` から。**
-
----
-
-## TODO-039. 読み上げの音量を設定する
-
-|      | main | 担当 |
-|------|------|------|
-| 見込み | Opus 5.5 / effort medium | main（実装）+ reviewer（Opus 5.5 / high）+ verifier（Sonnet 5.5 / medium） |
-
-- [ ] `ccspk volume 0.6` で読み上げの音量を決める。引数なしの `ccspk volume` は今の値を表示する。
-  値は `~/.config/ccspk/` のファイルに残し、次の読み上げから効く。範囲の外や数でない値は断る
-- [ ] `play()` の `pw-play` に `--volume` を渡す。ファイルが無いときは今までどおり（1.0）。
-  フックの読み上げと `ccspk say` の両方に効く
-- [ ] `demo()` に例を足し、`docs/UsersGuide.md`・`docs/Developer.md` に書く
-
-背景（2026-09-29 に利用者と決めた）:
-
-- システムの音量とは別に、読み上げの音量だけを決めたい。`pw-play --volume`（0〜1.0）を使う
-- 見送った案: PipeWire のミキサー（pavucontrol など）でアプリごとの音量として調整する案（`pw-play -P` で
-  `application.name` を付ける）。コマンドで変えたいので採らない。VOICEVOX の `volumeScale` は `--volume` と効果が
-  ほぼ同じなので採らない
-- 環境変数での上書きは付けない。`ccspk summary`（TODO-037）と違い、一時的に切り替えるものではないため
-- `ccspk summary` と同じ形にするので、TODO-037 が済んでから着手する
 
 ---
 

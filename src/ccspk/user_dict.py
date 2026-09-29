@@ -8,6 +8,7 @@
   ccspk dict export [FILE]
   ccspk dict import [FILE]
   ccspk speaker [番号 | 名前 [スタイル]] [--list]
+  ccspk volume [音量]
 
 `add` はアクセントの位置を、読みを /audio_query に渡してエンジンに任せる。
 同じ表記が登録済みなら、読みを書き換える。登録後の読みを表示し、--speak で鳴らす。
@@ -15,9 +16,11 @@
 （~/.config/ccspk/user_dict.json）へ書き出す。エンジンの起動時に systemd がこれを `import` する
 （systemd/voicevox-engine.service の ExecStartPost）。
 `speaker` は読み上げの話者を SPEAKER_FILE に残す。フック・say・dict add --speak・読み間違いの点検が使う。
+`volume` は読み上げの音量（pw-play --volume）を VOLUME_FILE に残す。フック・say・dict add --speak が使う。
 """
 
 import json
+import math
 import os
 import shutil
 import subprocess
@@ -39,6 +42,7 @@ ENGINE = "http://127.0.0.1:50021"
 SPEAKER = 119  # 夜語トバリ（明るい）。ccspk speaker で決めていないときの話者
 DICT_FILE = Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config") / "ccspk" / "user_dict.json"
 SPEAKER_FILE = DICT_FILE.parent / "speaker"  # ccspk speaker で決めた話者の番号
+VOLUME_FILE = DICT_FILE.parent / "volume"  # ccspk volume で決めた音量（0〜1.0）
 # 自動の点検（check.py）の状態のディレクトリと、自動で登録した単語の一覧
 # （日時<TAB>表記<TAB>正しい読み<TAB>エンジンの元の読み）
 STATE = Path(os.environ.get("XDG_STATE_HOME") or Path.home() / ".local/state") / "ccspk"
@@ -75,6 +79,28 @@ def speaker():
         return int(SPEAKER_FILE.read_text())
     except (OSError, ValueError):
         return SPEAKER
+
+
+def volume():
+    """pw-play に渡す音量。VOLUME_FILE が無い・読めない・0〜1.0 の数でないときは 1.0。"""
+    try:
+        v = float(VOLUME_FILE.read_text())
+    except (OSError, ValueError):
+        return 1.0
+    return v if 0 <= v <= 1 else 1.0  # nan もここで 1.0 になる
+
+
+def pw_play():
+    """wav を標準入力から鳴らす pw-play の引数。"""
+    return ["pw-play", f"--volume={volume()}", "-"]
+
+
+def write_config(path, value):
+    """書いている途中に読まれても、前の値で読むように、別のファイルに書いてから置き換える。"""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(".tmp")
+    tmp.write_text(f"{value}\n")
+    tmp.replace(path)
 
 
 def styles():
@@ -200,6 +226,21 @@ def demo():
     finally:
         shutil.rmtree(SPEAKER_FILE.parent)
         SPEAKER_FILE = saved
+    # 音量のファイル。無い・範囲の外・数でないときは 1.0
+    global VOLUME_FILE
+    saved, VOLUME_FILE = VOLUME_FILE, Path(tempfile.mkdtemp()) / "volume"
+    try:
+        assert volume() == 1.0 and pw_play() == ["pw-play", "--volume=1.0", "-"]
+        write_config(VOLUME_FILE, 0.6)
+        assert volume() == 0.6 and pw_play() == ["pw-play", "--volume=0.6", "-"]
+        for bad in ("1.5", "-0.1", "nan", "x"):
+            VOLUME_FILE.write_text(bad)
+            assert volume() == 1.0, bad
+        VOLUME_FILE.write_text("0")
+        assert volume() == 0.0
+    finally:
+        shutil.rmtree(VOLUME_FILE.parent)
+        VOLUME_FILE = saved
     print("ok")
 
 
@@ -229,7 +270,7 @@ def add(surface, pronunciation, accent, type_, priority, speak):
         if not shutil.which("pw-play"):
             sys.exit("pw-play が無いので鳴らせない（登録は済んだ）")
         wav = call("POST", "/synthesis", data=json.dumps(q).encode(), speaker=speaker())
-        if subprocess.run(["pw-play", "-"], input=wav).returncode:
+        if subprocess.run(pw_play(), input=wav).returncode:
             sys.exit("pw-play が失敗した（登録は済んだ）")
 
 
@@ -325,9 +366,17 @@ def speaker_(args, show_list):
         sid = pick(args, found)
         if sid is None:
             sys.exit(f"エンジンの話者に無い: {' '.join(args)}（ccspk speaker --list で一覧する）")
-        SPEAKER_FILE.parent.mkdir(parents=True, exist_ok=True)
-        tmp = SPEAKER_FILE.with_suffix(".tmp")  # 書いている途中に読まれても、前の番号で読むように
-        tmp.write_text(f"{sid}\n")
-        tmp.replace(SPEAKER_FILE)
+        write_config(SPEAKER_FILE, sid)
     sid = speaker()
     print(next((f"{i}  {n}  {s}" for i, n, s in found if i == sid), f"{sid}  （エンジンの話者に無い）"))
+
+
+@click.command()
+@click.argument("value", required=False, type=click.FloatRange(0, 1))
+def volume_(value):
+    """読み上げの音量を 0〜1.0 で決める（例: 0.6）。引数なしは今の音量を表示する。次の読み上げから効く。"""
+    if value is not None:
+        if math.isnan(value):  # FloatRange は nan を通す
+            raise click.BadParameter("nan は音量にできない", param_hint="VALUE")
+        write_config(VOLUME_FILE, abs(value))  # -0 を 0.0 にする
+    print(volume())

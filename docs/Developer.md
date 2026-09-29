@@ -14,7 +14,7 @@
 | `pyproject.toml` | コマンド `ccspk` の定義（`uv tool install` で入れる） |
 | `src/ccspk/cli.py` | サブコマンドをまとめる。`ccspk test` もここにある |
 | `src/ccspk/hook.py` | `ccspk hook`・`say`・`stop`・`status`・`summary`・`queue`・`translate`。Stop・MessageDisplay・PreToolUse フックとして、返答の冒頭と質問の文を VOICEVOX で読み上げる |
-| `src/ccspk/user_dict.py` | `ccspk dict`・`speaker`。VOICEVOX のユーザー辞書を操作する。読み上げの話者（`speaker()`）もここで決める |
+| `src/ccspk/user_dict.py` | `ccspk dict`・`speaker`・`volume`。VOICEVOX のユーザー辞書を操作する。読み上げの話者（`speaker()`）と音量（`volume()`）もここで決める |
 | `src/ccspk/check.py` | 読み間違いの自動の点検（`python -m ccspk.check`）。フックが読み上げた文を記録し、Stop で裏で起こす（[「3.8 自動の点検」](#38-自動の点検)） |
 | `src/ccspk/__init__.py` | `__version__`（`--version` で出す版） |
 | `src/ccspk/click_utils.py` | `--debug`・`--version` などの共通オプション |
@@ -331,6 +331,8 @@ PID で待たずに pidfd で待つのは、前の子プロセスが終わって
 
 話者は `user_dict.speaker()` が決める。`SPEAKER_FILE`（`~/.config/ccspk/speaker`。`ccspk speaker` が書く）の番号で、無い・数でないときは `SPEAKER`（119、夜語トバリ・明るい）。フックの子プロセスと `say` は `play()` の初めに 1 回だけ読み、`dict add --speak` と読み間違いの点検（`user_dict.query()`）は呼ぶたびに読む。`ccspk speaker` はエンジンの `/speakers` を `styles()` で (番号, 名前, スタイル) に並べ、`pick()` で引数から番号を引く。
 
+音量は `user_dict.volume()` が決める。`VOLUME_FILE`（`~/.config/ccspk/volume`。`ccspk volume` が書く）の値で、無い・0〜1.0 の数でないときは 1.0。`pw_play()` がこれを `pw-play --volume=` に付けた引数を作る。話者と同じく、フックの子プロセスと `say` は `play()` の初めに 1 回だけ読み、`dict add --speak` は呼ぶたびに読む。`speaker`・`volume` のファイルは `write_config()` が別のファイルに書いてから置き換えるので、書いている途中に読まれても前の値で読む。
+
 ### 3.8 自動の点検
 
 `check.py` が受け持つ。フック（`hook.py` の `main()`）からは次の 2 つだけを呼び、
@@ -442,7 +444,7 @@ hook の `demo()` は、整形と分割（`to_speech`、`drop_commit_ids`、`cli
 `assemble()`（一時ディレクトリで）、要約の切り替え（`summary_on`）、英文の見分け（`english`）、要約・翻訳させるかの分かれ目（`prepare`）、
 子プロセスの振り分け（`child_args`・`run_child`。`--after=` の pidfd のプロセスが終わるまで鳴らさないことも）、子プロセスを全部止める `stop_playing()`（偽の子プロセスで。使い回された番号は触らない）と `playing()`、`switch()`、要約と翻訳（`rewrite`。`PATH` の先頭に置いた偽の `claude` で、渡す指示、失敗・空・時間切れも。
 `claude` が無い例は `PATH` を一時ディレクトリだけにし、本物を起こさない）を `assert` で確かめている（pytest ではない）。
-dict の `demo()` は、アクセントの位置の決め方（`accent_of`）、全角から半角へ戻す `halfwidth`、話者の番号の引き方（`pick`）と、話者のファイルが無い・数でないときの既定（`speaker`。一時ディレクトリで）を確かめている。
+dict の `demo()` は、アクセントの位置の決め方（`accent_of`）、全角から半角へ戻す `halfwidth`、話者の番号の引き方（`pick`）と、話者のファイルが無い・数でないときの既定（`speaker`）、音量のファイルが無い・範囲の外・数でないときの既定（`volume`・`pw_play`）を確かめている（後の 2 つは一時ディレクトリで）。
 check の `demo()` は、単語の切り出し（`extract`）、`claude` の返答の読み取り（`parse`）、点検を起こす条件
 （`pending`）と `SPOKEN` の切り詰め（`record`）を確かめている（後の 2 つは一時ディレクトリで）。
 通れば `ok` と出る。個別に走らせる手段は無い。lint の設定は無い。

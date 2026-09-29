@@ -3,7 +3,7 @@
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 Claude Code の返答の冒頭を、手元の VOICEVOX で読み上げるフック。コマンドは
-`ccspk`（`hook`・`say`・`stop`・`status`・`summary`・`queue`・`translate`・`speaker`・`test`・`dict` のサブコマンド。`cli.py` がまとめる）。
+`ccspk`（`hook`・`say`・`stop`・`status`・`summary`・`queue`・`translate`・`speaker`・`volume`・`test`・`dict` のサブコマンド。`cli.py` がまとめる）。
 仕組みとテストは `docs/Developer.md`、インストールと辞書は `docs/UsersGuide.md` にある。
 
 ## コマンド

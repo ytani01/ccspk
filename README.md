@@ -31,6 +31,7 @@ Claude Code の返答を、手元の VOICEVOX（既定は夜語トバリ・明�
 - `ccspk queue` で、前の読み上げを止めずに来た順に読むかを切り替える
 - `ccspk translate` で、英文の返答を日本語に訳して読むかを切り替える
 - `ccspk speaker` で、読み上げの話者を変える
+- `ccspk volume` で、読み上げの音量を変える
 
 ## 3. 注意事項
 

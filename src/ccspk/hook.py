@@ -32,7 +32,7 @@ import click
 
 from . import check
 from .mylog import getLogger
-from .user_dict import DICT_FILE, STATE, speaker
+from .user_dict import DICT_FILE, STATE, pw_play, speaker
 
 LIMIT = 180  # 読み上げるのはおよそここまで。超えるときは次の文末（無ければ読点）まで
 # 延ばすのはここまで。句点の無い英語の返答 2,339 字を 1 回で合成しようとして、
@@ -467,6 +467,7 @@ def play(text):
     """1 文目ができたらすぐ鳴らし、2 文目以降は鳴らしている間に合成する。"""
     wavs = queue.Queue()
     sid = speaker()  # 読んでいる途中で ccspk speaker を変えても、声は変えない
+    args = pw_play()  # 音量も同じ
 
     def produce():
         # エンジンが動いていない、応答が途中で切れた、など何で止まっても、
@@ -479,7 +480,7 @@ def play(text):
 
     threading.Thread(target=produce, daemon=True).start()
     while (wav := wavs.get()) is not None:
-        subprocess.run(["pw-play", "-"], input=wav, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        subprocess.run(args, input=wav, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
 def child_args(text, flag=None, after=None):
