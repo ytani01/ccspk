@@ -316,7 +316,7 @@ PID で待たずに pidfd で待つのは、前の子プロセスが終わって
 | `CUT` | 正規表現 | 1・2 文目を切る区切り |
 | `CUT_MIN` | 8 | これより手前では切らない |
 | `SPACE_WITHIN` | 30 | この字数までに `CUT` が無いときだけ、スペースで切る |
-| `DIGITS` | `ゼロ イチ ニー …` | `TODO-` の番号を桁ごとに読むカナ（0〜9） |
+| `DIGITS` | `ゼロ イチ ニー …` | `TODO-` の番号と版の番号（`v1.7.0`）を桁ごとに読むカナ（0〜9） |
 | `SUMMARIZE` | `--summarize` | `PLAY` の後ろに付けると、子プロセスが要約してから読む |
 | `SUMMARY` | `~/.config/ccspk/summary` | あれば要約が入。`user_dict.DICT_FILE` と同じディレクトリ（`$XDG_CONFIG_HOME` に従う） |
 | `QUEUE` | `~/.config/ccspk/queue` | あれば順番に読むモード。`SUMMARY` と同じディレクトリ |
@@ -363,6 +363,7 @@ sudachipy は読まない（最初の音を遅らせない）。
 1. `LOCK` を `LOCK_EX | LOCK_NB` で取る。取れなければ何もせず終わる（前の点検が走っている）
 2. `SPOKEN` の mtime を控えてから読み、`extract()` で単語を切り出す。英字は正規表現 `ALPHA`、
    漢字は sudachipy（sudachidict_core、`SplitMode.C`）で、品詞の先頭が名詞・漢字を含む・2 字以上のもの。
+   英字のうち、版の番号（正規表現 `VERSION`。`v1.7.0`）は除く。読み方は `tidy()` が同じ `VERSION` で決める。
    sudachipy は 49,149 バイトより長い入力を断るので、1 行ずつ渡す。`CHECKED` の単語と、エンジンの辞書に
    登録済みの単語（NFKC で揃えて比べる）を除く
 3. 各単語の読みを `/audio_query` の `kana` で取り、`表記<TAB>読み<TAB>最初に出てきた行の、単語の前後 30 字（around()）` の一覧を

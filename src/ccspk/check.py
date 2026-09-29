@@ -26,6 +26,7 @@ FAILED = STATE / "failed.txt"  # 点検が失敗した理由
 LOCK = STATE / "check.lock"  # 点検は 1 つずつ
 ALPHA = r"[A-Za-z][A-Za-z0-9._+-]*[A-Za-z0-9]"  # 英字の単語（1 字は除く）
 KANJI = r"[一-鿿々〆]"
+VERSION = r"v[0-9]+(?:\.[0-9]+)*"  # 版の番号（v1.7.0）。hook.py が読み方を決めるので点検しない
 TIMEOUT = 300  # claude -p を待つ秒数
 PROMPT = """音声合成エンジン VOICEVOX が、ソフトウェア開発の会話に出た単語をどう読んだかの一覧です。
 各行は「表記<TAB>読み<TAB>その単語が出てきた文」。文は読み方を決める手がかりです。読みはエンジンのカナで、' はアクセントの位置、_ は無声化を表します（どちらも正誤に関係しません）。
@@ -94,7 +95,8 @@ def extract(text):
     words = {}
     for line in text.splitlines():  # sudachipy は 49,149 バイトより長い入力を断る
         for w in re.findall(ALPHA, line):
-            words.setdefault(w, line)
+            if not re.fullmatch(VERSION, w):
+                words.setdefault(w, line)
         for m in tok.tokenize(line, SplitMode.C):
             s = m.surface()
             if m.part_of_speech()[0] == "名詞" and len(s) >= 2 and re.search(KANJI, s):
@@ -204,8 +206,8 @@ def demo():
     import shutil
     import tempfile
 
-    got = extract("README.md と a を直した。優先度を試さないで行を読む。作業中のリンク先 v1.2 と C++ と x\n次の行は優先度")
-    assert list(got) == ["README.md", "v1.2", "優先度", "作業中", "リンク先"], got
+    got = extract("README.md と a を直した。優先度を試さないで行を読む。作業中のリンク先 v1.2 と v2、v1.2.3b と C++ と x\n次の行は優先度")
+    assert list(got) == ["README.md", "v1.2.3b", "優先度", "作業中", "リンク先"], got  # 版の番号は拾わない
     assert got["優先度"].startswith("README.md と")  # 最初に出てきた行
     assert around("あ" * 40 + "語" + "い" * 40, "語") == "あ" * 30 + "語" + "い" * 30
     assert around("短い語の文", "語") == "短い語の文"

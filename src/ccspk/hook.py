@@ -178,6 +178,13 @@ def tidy(text):
     text = re.sub(r"(?<=[0-9０-９])[ \t]*~[ \t]*(?=[0-9０-９])", "から", text)
     text = text.replace("~", "")
     text = re.sub(r"[ \t]*[〜～→][ \t]*", "から", text)
+    # 版の番号（v1.7.0）は、エンジンが 2 つ目の点を「、」と読むので、v はそのまま、数字を桁ごと、点を「テン」にする。
+    # 後ろに英数字が続くもの（v1.2.3b、v1.2-rc1）は版と見ない。数字に挟まれた「~」を「から」にした後で置き換える。直後のスペースは TODO- と同じく日本語が続くときだけ消す
+    text = re.sub(
+        rf"(?<![0-9A-Za-z])(?<![0-9A-Za-z]\.)({check.VERSION})(?!\.?[0-9A-Za-z]|-[0-9A-Za-z])(?:[ \t]+(?=[\u3041-\u30ff\u4e00-\u9fff]))?",
+        lambda m: "".join("テン" if c == "." else DIGITS[int(c)] if c.isdigit() else c for c in m[1]),
+        text,
+    )
     # 数字と単位の間のスペースで区切って読む（180 字 → ヒャクハチジュウ、ジ）ので、
     # 同じ行で日本語が続くときだけ消す。英語が続くとき（3 files）は 1 語と読まれないよう残す
     text = re.sub(r"(?<=[0-9０-９])[ \t]+(?=[\u3041-\u30ff\u4e00-\u9fff])", "", text)
@@ -599,7 +606,12 @@ def demo():
     assert to_speech("`TODO-013` の件、**TODO-020**～`022` の件、TODO-001 ～ 002 の件") == (
         "TODOゼロイチサンの件、TODOゼロニーゼロからゼロニーニーの件、TODOゼロゼロイチからゼロゼロニーの件")
     assert to_speech("PR-12、XTODO-1、TODO-1〜a") == "PR-12、XTODO-1、TODOイチからa"  # TODO- のほかは変えない
-    assert to_speech("3 files と 1 ファイル、v1 A") == "3 files と 1ファイル、v1 A"
+    assert to_speech("3 files と 1 ファイル、v1 A") == "3 files と 1ファイル、vイチ A"
+    # 版の番号は、v はそのまま、数字を桁ごと、点を「テン」に
+    assert to_speech("v1.7.0 を出した。v2 と v1.25、v1.4.0〜v1.7.0") == (
+        "vイチテンナナテンゼロを出した。vニーと vイチテンニーゴー、vイチテンヨンテンゼロからvイチテンナナテンゼロ")
+    assert to_speech("v1.2.3b、xv1.2、1.v2、V1.2、v1.2.") == "v1.2.3b、xv1.2、1.v2、V1.2、vイチテンニー."
+    assert to_speech("v1~2 と v1.2-rc1、v1.6.0..v1.7.0") == "vイチから2と v1.2-rc1、vイチテンロクテンゼロ..vイチテンナナテンゼロ"  # 版と見ないもの
     assert to_speech("x 1  字、**2** 行、１８０ 字") == "x 1字、2行、１８０字"
     # 次に行が続く行の終わりに「。」を補う。字下げした行は前の行の続きと見てつなぐ（数字の後のスペースも残す）
     assert to_speech("手順 1\n次へ") == "手順 1。 次へ"
@@ -642,7 +654,7 @@ def demo():
     assert to_speech("2 つに分けたため、コミットは `1acb1bf` です。PID は `1234567` です。") == (
         "2つに分けたため、コミットは 1acb1bf です。PID は 1234567です。")
     # 消すと文が壊れるものは残す
-    assert to_speech("`fd36df8` に注釈付きタグ `v0.1.0` を付けました") == "fd36df8に注釈付きタグ v0.1.0を付けました"
+    assert to_speech("`fd36df8` に注釈付きタグ `v0.1.0` を付けました") == "fd36df8に注釈付きタグ vゼロテンイチテンゼロを付けました"
     assert to_speech("`origin/master` は `7a526e0`（TODO-006 のコミット）を指していて") == (
         "origin/master は 7a526e0（TODOゼロゼロロクのコミット）を指していて")
     assert to_speech("`a1a9b44` より前の 5 件。`88ef11d` の記録どおり") == "a1a9b44より前の 5件。88ef11d の記録どおり"
