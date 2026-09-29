@@ -1,5 +1,22 @@
 # 使い方
 
+Claude Code が返答や質問を出すたびにフックで `ccspk hook` を起こし、`ccspk` が VOICEVOX エンジンで合成した音を
+`pw-play` で PipeWire に流す。
+
+```mermaid
+flowchart LR
+    CC["Claude Code"] -- "Stop・MessageDisplay・PreToolUse フック" --> HK["ccspk hook"]
+    HK -- "起こす" --> PL["再生の子プロセス"]
+    PL -. "要約・翻訳を入れたとき" .-> CP["claude -p"]
+    PL -- "合成（127.0.0.1:50021）" --> VV["VOICEVOX エンジン（systemd の user unit）"]
+    PL -- "wav" --> PW["pw-play"] --> PWS["PipeWire"]
+    HK -. "Stop のとき、点検していない読んだ文があれば" .-> CK["読み間違いの点検"]
+    CK --> CP
+    CK -- "辞書に登録" --> VV
+    CK -- "辞書を書き出す" --> UD
+    UD[("~/.config/ccspk/user_dict.json")] -- "起動のたびに読み込む" --> VV
+```
+
 ## 1. インストール
 
 リポジトリは `~/work/ccspk` に clone する（下の手順のコマンドは、
@@ -45,7 +62,8 @@ unit ファイルのパスを揃えて書き換え、`systemctl --user daemon-re
 `~/.claude/settings.json` の `hooks` に Stop・MessageDisplay・PreToolUse のフックを追加し、
 `env` で `CCSPK_SPEAK` を `1` にする。どのフックで何を読むかは [`ccspk hook`](#32-ccspk-hook)。
 途中の文章や質問が要らなければ、MessageDisplay や PreToolUse のフックは追加しない。
-`ccspk` をインストールしていないマシンでは何もしない。
+フックのコマンド（`! command -v ccspk >/dev/null || ccspk hook`）は、`ccspk` をインストールしていないマシンでは
+何もせずに終わる。
 `ccspk` は `PATH` から探すので、インストールしたのに音が出ないときは、Claude Code を
 起動するシェルで `command -v ccspk` が見つかるかを確認する。
 
@@ -300,7 +318,7 @@ ccspk say TEXT
 
 **説明**
 
-`TEXT` を合成して鳴らし、鳴らし終わってから終わる。フックの子プロセスと同じ動きで、
+`TEXT` を合成して鳴らし、鳴らし終えるまで戻らない。フックの子プロセスと同じ動きで、
 合成と再生だけを試すのに使う。フックと違い、次のことはしない。
 
 - `CCSPK_SPEAK` や鳴らせない理由のファイルを見ない

@@ -44,15 +44,16 @@
   エンジンは文脈を見ずに読みを当てるため。全部をひらがなにはさせない（エンジンが単語の切れ目を推定できず、抑揚が平板になる）
 - 読み間違いを減らすため、辞書で直せないもの（記号や数字など）は置き換え、単語の読みはエンジンの辞書で直す。どちらも
   [UsersGuide.md](UsersGuide.md#2-読み上げの辞書) にある
-- 文ごとに合成し、1 文目ができたらすぐ鳴らす。2 文目以降は鳴らしている
-  間に合成する。短い文の直後に長い文が来ると、継ぎ目で数秒待つことがある
-- 1 文目と 2 文目はさらに前後 2 つに切り、1 文目の前半ができたらすぐ鳴らす。
-  2 文目を切るのは、継ぎ目の待ちを減らすため。切るのは 8 字より
+- 文ごとに合成し（1・2 文目は下のとおり前後に切る）、最初の塊（1 文目の前半）ができたらすぐ鳴らす。
+  残りは鳴らしている間に合成する。短い文の直後に長い文が来ると、継ぎ目で数秒待つことがある
+- 1 文目と 2 文目はさらに前後 2 つに切る。1 文目を切るのは最初の音を早めるため、
+  2 文目を切るのは継ぎ目の待ちを減らすため。切るのは 8 字より
   後ろで最初に現れる読点・閉じ括弧・コロンの後ろか、開き括弧の前。それらが
   30 字以内に無いときだけ、その手前のスペースで切り、スペースも無ければ
   30 字より後ろの区切りで切る。後半が句点だけになる所や、`12:30`・`name()` の
-  ような語の中の半角「:」「(」では切らない。切った所は抑揚が文末のように
-  下がる。最初の音までは、エンジンが空いていれば 1.2〜2.5 秒ほど
+  ような語の中の半角「:」「(」では切らない
+- 切った所は、抑揚が文末のように下がる
+- 最初の音までは、エンジンが空いていれば 1.2〜2.5 秒ほど
 - 返答の最後の文章に加えて、ツールを呼ぶ前などの途中の文章も読む（`MessageDisplay`）。
   ただし `MessageDisplay` が起動しない文章があり、それは読まない。起動する条件は分かっていない
 - `AskUserQuestion` で質問してくるときは、質問の文を読む（`PreToolUse`）。質問が複数あれば
@@ -65,7 +66,7 @@
 - 読んでから 5 秒のうちに同じ文章が来たら読まない。返答の最後の文章は `MessageDisplay` と
   `Stop` の両方から（実測では 0.01 秒差で）来るので、2 度読まないため
 - 表だけ・URL だけのように、整えると空になる途中の文章や質問では、前の再生を止めない。
-  `Stop` が空のときは、今までどおり止める
+  空の `Stop` では、前の再生を止める
 - サブエージェントの報告や質問では鳴らない（`SubagentStop` は登録せず、`MessageDisplay` と
   `PreToolUse` も `agent_id` があれば読まない）
 - 鳴らせないとき（条件は下の [「3.4 鳴らせるかを確かめる」](#34-鳴らせるかを確かめる)）は、鳴らさずに終わり、
@@ -124,6 +125,39 @@ MessageDisplay フックとして、`AskUserQuestion` を呼ぶ直前に PreTool
     `QUEUE` があれば、`PIDFILE` にある動いている子プロセスの後ろに足す（下の「3.2 子プロセス」）。
     要約・翻訳させないときは、`check.record()` で文を記録する（[「3.8 自動の点検」](#38-自動の点検)）
 
+`LOCK` を取った後で終わるときは、`LOCK` を放してから、Stop なら `check.after_stop()` を呼ぶ（[「3.8 自動の点検」](#38-自動の点検)）。
+
+```mermaid
+flowchart TD
+    S(["ccspk hook"]) --> A{"1. CCSPK_SPEAK が 1"}
+    A -- いいえ --> E(["終わる"])
+    A -- はい --> B{"2. UNUSABLE が無い"}
+    B -- ある --> E
+    B -- 無い --> C{"3. unusable() で鳴らせる"}
+    C -- だめ --> CW["理由を UNUSABLE に書く"] --> E
+    C -- 鳴らせる --> D{"4. JSON を読む"}
+    D -- "読めない・MessageDisplay か PreToolUse で agent_id がある" --> E
+    D -- 読めた --> L["5. LOCK を取る"]
+    L --> F{"6. イベント"}
+    F -- MessageDisplay --> F1{"assemble() で分がそろった"}
+    F1 -- まだ --> X
+    F1 -- そろった --> P
+    F -- PreToolUse --> F2["questions() で質問の文をつなぐ"] --> P
+    F -- Stop --> P["7. prepare() で整えた文・印・本文を作る"]
+    P --> G{"MessageDisplay か PreToolUse で、整えた文が空"}
+    G -- はい --> X
+    G -- いいえ --> H{"8. LAST と同じで SAME_WITHIN 秒のうち"}
+    H -- はい --> X
+    H -- いいえ --> Q{"9. QUEUE があって文が空でない"}
+    Q -- いいえ --> STP["stop_playing()"] --> T
+    Q -- はい --> T{"10. 文が空でない"}
+    T -- 空 --> X
+    T -- 空でない --> SP["LAST に書き、speak() で子プロセスを起こす。要約・翻訳させないなら check.record()"] --> X
+    X["LOCK を放す"] --> Y{"Stop"}
+    Y -- はい --> AS["check.after_stop()"] --> E
+    Y -- いいえ --> E
+```
+
 フックはここで終わり、Claude Code を待たせない（登録の `timeout` は 5 秒）。
 合成と再生は子プロセスが受け持つ。
 
@@ -134,6 +168,35 @@ MessageDisplay フックとして、`AskUserQuestion` を呼ぶ直前に PreTool
 `-P` は、Claude Code の作業ディレクトリを `sys.path` に入れないため。
 `start_new_session=True` で新しいセッション（兼プロセスグループ）にするので、
 子プロセスが起こした `pw-play` まで、グループごと止められる。
+
+```mermaid
+sequenceDiagram
+    participant H as フック（main()）
+    participant C as 子プロセス（--play）
+    participant CL as claude -p（sonnet）
+    participant V as エンジン
+    participant P as pw-play
+    H->>C: speak() で起こす（本文、印）
+    Note over H: PID を PIDFILE に書いて終わる
+    opt 要約・翻訳させるとき（--summarize・--translate）
+        C->>CL: rewrite()。指示と、reply の行で囲んだ本文
+        CL-->>C: 要約・訳
+        Note over C: to_speech() で整えて切る。LOCK を取って check.record()
+    end
+    opt 順番に読むモード（--after=）
+        Note over C: wait_for() で前の子プロセスが終わるのを待つ
+    end
+    par 合成するスレッド
+        loop chunks() の塊ごと
+            C->>V: /audio_query・/synthesis
+            V-->>C: wav（キューへ入れる）
+        end
+    and 鳴らすループ
+        loop キューの wav ごと
+            C->>P: pw-play - に渡す
+        end
+    end
+```
 
 要約させるときは `python -P -m ccspk.hook --play --summarize <本文>`（`SUMMARIZE`）、訳させるときは
 `--summarize` の代わりに `--translate`（`TRANSLATING`）を付けて起こし、子プロセスは `play_rewritten()` で次の順に進む。
@@ -308,6 +371,44 @@ sudachipy は読まない（最初の音を遅らせない）。
 `user_dict.call()` の `sys.exit`）、理由を `FAILED` に書いて終わり、`CHECKED` は変えない（次の Stop でやり直す）。
 4. の登録や `save()` の失敗は、5. まで済ませてから、失敗した単語を `FAILED` に書く
 （`claude -p` を呼び直さないため）。
+
+```mermaid
+sequenceDiagram
+    participant H as フック（Stop）
+    participant K as 点検（python -m ccspk.check）
+    participant V as エンジン
+    participant CL as claude -p（opus）
+    Note over H: LOCK を放した後で after_stop()
+    Note over H: FAILED があれば systemMessage で出して消す
+    H->>K: pending() が真なら起こす（入出力は捨てる）
+    Note over H: 点検を待たずに終わる
+    Note over K: check.lock を取れなければ終わる
+    Note over K: SPOKEN の mtime を控える
+    K->>V: GET /user_dict（登録済みの単語）
+    Note over K: SPOKEN から extract() で単語を切り出し、CHECKED と登録済みの単語を除く
+    opt 残った単語がある
+    loop 単語ごと
+        K->>V: /audio_query
+        V-->>K: kana（エンジンの読み）
+    end
+    K->>CL: PROMPT と、表記・読み・前後 30 字の一覧
+    CL-->>K: 正しい読み
+    Note over K: parse() で、エンジンと同じ発音の行などを捨てる
+    loop 残った単語ごと
+        K->>V: /audio_query（Claude の読み）
+        V-->>K: kana
+        opt same() で違う発音
+            K->>V: user_dict.register()
+            Note over K: ADDED に追記
+        end
+    end
+    opt 1 単語でも登録できた
+        V-->>K: save()。エンジンの辞書を user_dict.json へ書き出す
+    end
+    Note over K: 渡した単語を CHECKED に追記
+    end
+    Note over K: CHECKED の mtime を、控えた SPOKEN の mtime に揃える
+```
 
 `STATE` と `ADDED` は `user_dict.py` に置き、`check.py` はそれを import する（`dict auto` も `ADDED` を使う）。
 
