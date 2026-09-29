@@ -55,7 +55,7 @@ unit ファイルのパスを揃えて書き換え、`systemctl --user daemon-re
 （unit ファイルの `ExecStartPost`。`~/.local/bin/ccspk` を使うので、先に `ccspk` を
 インストールしておく）。詳しくは [辞書のファイル](#21-辞書のファイル)。
 
-整形が正しく動くかは [`ccspk test`](#39-ccspk-test) で確認できる。
+整形が正しく動くかは [`ccspk test`](#310-ccspk-test) で確認できる。
 
 ### 1.2 Claude Code の設定
 
@@ -147,10 +147,15 @@ Claude（Sonnet）に日本語へ訳させてから読む（[`ccspk translate`](
 訳す返答では、最初の音が 5 秒ほど遅れ、1 回に入力 3,000〜6,500・出力 約 250 トークンを使う。返答の最後の文章だけでなく、
 途中の文章や質問も訳すので、英語で作業するとそのたびに使う。
 
+### 1.9 話者を変える
+
+読み上げの話者は、既定では夜語トバリ（明るい、119）。`ccspk speaker --list` でエンジンの話者を一覧し、
+`ccspk speaker 3` か `ccspk speaker ずんだもん ノーマル` のように決める（[`ccspk speaker`](#39-ccspk-speaker)）。
+
 ## 2. 読み上げの辞書
 
 返答の読み上げで読み間違える単語は、VOICEVOX のエンジンのユーザー辞書で読みを直す。
-操作はどれも [`ccspk dict`](#310-ccspk-dict) のサブコマンドで行う。
+操作はどれも [`ccspk dict`](#311-ccspk-dict) のサブコマンドで行う。
 
 1. `ccspk dict kana` で、エンジンが今どう読むかを確認する
 2. `ccspk dict add` で表記と読みを登録する。登録後の読みが表示される
@@ -205,7 +210,7 @@ ccspk dict add README リードミー --speak
 ### 2.3 読み間違いの自動の点検
 
 読み上げた文から単語を切り出し、読み間違いを Claude（Opus）に判定させて、誤りは辞書に登録する。
-確認は挟まない。登録した単語は [`ccspk dict auto`](#315-ccspk-dict-auto) で見直し、まとめて消せる。
+確認は挟まない。登録した単語は [`ccspk dict auto`](#316-ccspk-dict-auto) で見直し、まとめて消せる。
 
 - 点検するのは、英字を含む単語（`README.md`・`v1.2` など。1 字は除く）と、漢字を含む 2 字以上の名詞
   （`優先度`・`作業中` など）。動詞の活用形（`試さ`）と 1 字の漢字（`行`）は、文によって読みが
@@ -525,7 +530,61 @@ $ ccspk translate
 on
 ```
 
-### 3.9 ccspk test
+### 3.9 ccspk speaker
+
+```
+ccspk speaker [番号 | 名前 [スタイル]]
+ccspk speaker --list
+```
+
+**説明**
+
+読み上げの話者（[1.9](#19-話者を変える)）を、番号か、名前とスタイルで決める。スタイルを省くと、その話者の最初のスタイル。
+決めた後の話者を `番号  名前  スタイル` で表示する。引数が無ければ今の話者を表示する。
+次の読み上げから効き、フック・[`ccspk say`](#33-ccspk-say)・[`ccspk dict add --speak`](#313-ccspk-dict-add)・
+[読み間違いの自動の点検](#23-読み間違いの自動の点検)のすべてが使う。読んでいる途中で変えても、その読み上げの声は変わらない。
+
+どの使い方もエンジン（127.0.0.1:50021）に接続し、`/speakers` にある番号・名前だけを受け付ける。
+エンジンに接続できないときは、理由を表示して終わる。
+
+**引数**
+
+- `番号` — 話者のスタイルの番号（`--list` の 1 列目）
+- `名前` — 話者の名前（`--list` の 2 列目）。完全に一致するものだけ
+- `スタイル` — スタイルの名前（`--list` の 3 列目）
+
+**オプション**
+
+- `--list` — エンジンの話者を、1 行に 1 スタイルずつ `番号  名前  スタイル` で一覧する。引数とは一緒に使えない
+
+**終了ステータス**
+
+- `0` — 成功
+- `1` — エンジンに無い番号・名前、またはエンジンとやり取りできない
+- `2` — 引数の誤り（3 つ以上、または `--list` と一緒に渡した）
+
+**ファイル**
+
+- `~/.config/ccspk/speaker` — 決めた話者の番号（`$XDG_CONFIG_HOME` があれば `$XDG_CONFIG_HOME/ccspk/speaker`）。
+  無い・数でないときは 119。エンジンに無い番号が書いてあると（エンジンから話者を外したときなど）、読み上げが鳴らず、
+  `dict kana`・`dict add` と読み間違いの点検もエンジンに断られる。`ccspk speaker` で選び直す
+
+**例**
+
+```console
+$ ccspk speaker
+119  夜語トバリ  明るい
+$ ccspk speaker --list
+2  四国めたん  ノーマル
+0  四国めたん  あまあま
+...
+$ ccspk speaker ずんだもん
+3  ずんだもん  ノーマル
+$ ccspk speaker 夜語トバリ 明るい
+119  夜語トバリ  明るい
+```
+
+### 3.10 ccspk test
 
 ```
 ccspk test
@@ -550,7 +609,7 @@ ok
 ok
 ```
 
-### 3.10 ccspk dict
+### 3.11 ccspk dict
 
 ```
 ccspk dict COMMAND [ARGS]...
@@ -563,7 +622,7 @@ VOICEVOX のエンジンのユーザー辞書を操作する。どのサブコ�
 `dict add`・`dict remove`・`dict import`・`dict auto --remove` は、成功すると、エンジンの辞書を
 [辞書のファイル](#21-辞書のファイル)へ書き出し、「書き出した: パス」と表示する。
 
-### 3.11 ccspk dict kana
+### 3.12 ccspk dict kana
 
 ```
 ccspk dict kana TEXT
@@ -591,7 +650,7 @@ $ ccspk dict kana 'Ponytail を使う'
 ポ'ニテイル、オ'/_ツカウ'
 ```
 
-### 3.12 ccspk dict add
+### 3.13 ccspk dict add
 
 ```
 ccspk dict add [--accent N] [--type TYPE] [--priority N] [--speak] SURFACE PRONUNCIATION
@@ -643,7 +702,7 @@ $ ccspk dict add Ponytail ポニーテール
 読み: ポニイテ'エル
 ```
 
-### 3.13 ccspk dict list
+### 3.14 ccspk dict list
 
 ```
 ccspk dict list
@@ -669,7 +728,7 @@ e8587f70-4e27-4017-aa5c-7c5bfdf4251f  README  リードミー  1  5
 …
 ```
 
-### 3.14 ccspk dict remove
+### 3.15 ccspk dict remove
 
 ```
 ccspk dict remove SURFACE
@@ -701,7 +760,7 @@ $ ccspk dict remove Ponytail
 書き出した: /home/user/.config/ccspk/user_dict.json
 ```
 
-### 3.15 ccspk dict auto
+### 3.16 ccspk dict auto
 
 ```
 ccspk dict auto [--remove]
@@ -711,8 +770,8 @@ ccspk dict auto [--remove]
 
 [自動の点検](#23-読み間違いの自動の点検)で登録した単語を、登録した順に 1 単語 1 行で一覧する
 （日時・表記・正しい読み・エンジンの元の読み）。無ければ「自動で登録した単語は無い」と表示する。
-1 つずつ消すなら [`ccspk dict remove`](#314-ccspk-dict-remove)、読みを直すなら
-[`ccspk dict add`](#312-ccspk-dict-add) を使う。どちらも、その単語を一覧から外す。
+1 つずつ消すなら [`ccspk dict remove`](#315-ccspk-dict-remove)、読みを直すなら
+[`ccspk dict add`](#313-ccspk-dict-add) を使う。どちらも、その単語を一覧から外す。
 
 **オプション**
 
@@ -740,7 +799,7 @@ $ ccspk dict auto --remove
 書き出した: /home/user/.config/ccspk/user_dict.json
 ```
 
-### 3.16 ccspk dict export
+### 3.17 ccspk dict export
 
 ```
 ccspk dict export [FILE]
@@ -766,7 +825,7 @@ ccspk dict export [FILE]
 ccspk dict export backup.json
 ```
 
-### 3.17 ccspk dict import
+### 3.18 ccspk dict import
 
 ```
 ccspk dict import [FILE]

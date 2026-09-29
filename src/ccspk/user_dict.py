@@ -7,12 +7,14 @@
   ccspk dict auto [--remove]
   ccspk dict export [FILE]
   ccspk dict import [FILE]
+  ccspk speaker [番号 | 名前 [スタイル]] [--list]
 
 `add` はアクセントの位置を、読みを /audio_query に渡してエンジンに任せる。
 同じ表記が登録済みなら、読みを書き換える。登録後の読みを表示し、--speak で鳴らす。
 `add`・`remove`・`import` が成功したら、エンジンの辞書を DICT_FILE
 （~/.config/ccspk/user_dict.json）へ書き出す。エンジンの起動時に systemd がこれを `import` する
 （systemd/voicevox-engine.service の ExecStartPost）。
+`speaker` は読み上げの話者を SPEAKER_FILE に残す。フック・say・dict add --speak・読み間違いの点検が使う。
 """
 
 import json
@@ -20,6 +22,7 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
 import unicodedata
 import urllib.error
 import urllib.parse
@@ -33,8 +36,9 @@ from .mylog import getLogger
 _log = getLogger("dict")
 
 ENGINE = "http://127.0.0.1:50021"
-SPEAKER = 119  # 夜語トバリ（明るい）。hook.py と揃える
+SPEAKER = 119  # 夜語トバリ（明るい）。ccspk speaker で決めていないときの話者
 DICT_FILE = Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config") / "ccspk" / "user_dict.json"
+SPEAKER_FILE = DICT_FILE.parent / "speaker"  # ccspk speaker で決めた話者の番号
 # 自動の点検（check.py）の状態のディレクトリと、自動で登録した単語の一覧
 # （日時<TAB>表記<TAB>正しい読み<TAB>エンジンの元の読み）
 STATE = Path(os.environ.get("XDG_STATE_HOME") or Path.home() / ".local/state") / "ccspk"
@@ -62,7 +66,29 @@ def call(method, path, data=None, **params):
 
 
 def query(text):
-    return json.loads(call("POST", "/audio_query", speaker=SPEAKER, text=text))
+    return json.loads(call("POST", "/audio_query", speaker=speaker(), text=text))
+
+
+def speaker():
+    """話者の番号。SPEAKER_FILE が無い・読めない・数でないときは SPEAKER。"""
+    try:
+        return int(SPEAKER_FILE.read_text())
+    except (OSError, ValueError):
+        return SPEAKER
+
+
+def styles():
+    """エンジンの話者を (番号, 名前, スタイル) で、エンジンの並び順に返す。"""
+    return [(s["id"], p["name"], s["name"]) for p in json.loads(call("GET", "/speakers")) for s in p["styles"]]
+
+
+def pick(args, found):
+    """番号 1 つか、名前（とスタイル）から、found（styles() の形）にある番号を返す。無ければ None。
+    スタイルを省いたら、その話者の最初のスタイル。"""
+    if len(args) == 1 and args[0].isdecimal():
+        return next((i for i, _n, _s in found if i == int(args[0])), None)
+    name, style = args[0], args[1] if len(args) > 1 else None
+    return next((i for i, n, s in found if n == name and style in (None, s)), None)
 
 
 def accent_of(phrases):
@@ -157,6 +183,23 @@ def demo():
     assert accent_of([ph(2, 2), ph(1, 3)]) == 2  # 先頭の句の最後でも、句が 2 つなら平板にしない
     assert halfwidth("！／ｅｔｃ／ＴＯＤＯ－０１～") == "!/etc/TODO-01~"  # 範囲の両端も
     assert halfwidth("ｶﾅ　語") == "ｶﾅ　語"  # 半角カナと全角スペースは変えない
+    found = [(2, "四国めたん", "ノーマル"), (0, "四国めたん", "あまあま"), (118, "夜語トバリ", "ノーマル"), (119, "夜語トバリ", "明るい")]
+    assert pick(("119",), found) == 119 and pick(("１１８",), found) == 118 and pick(("0",), found) == 0
+    assert pick(("5",), found) is None  # エンジンに無い番号
+    assert pick(("夜語トバリ", "明るい"), found) == 119 and pick(("四国めたん",), found) == 2  # 省くと最初のスタイル
+    assert pick(("夜語トバリ", "あまあま"), found) is None and pick(("夜語",), found) is None
+    # 話者のファイル。無い・数でないときは SPEAKER
+    global SPEAKER_FILE
+    saved, SPEAKER_FILE = SPEAKER_FILE, Path(tempfile.mkdtemp()) / "speaker"
+    try:
+        assert speaker() == SPEAKER
+        SPEAKER_FILE.write_text("3\n")
+        assert speaker() == 3
+        SPEAKER_FILE.write_text("x\n")
+        assert speaker() == SPEAKER
+    finally:
+        shutil.rmtree(SPEAKER_FILE.parent)
+        SPEAKER_FILE = saved
     print("ok")
 
 
@@ -185,7 +228,7 @@ def add(surface, pronunciation, accent, type_, priority, speak):
     if speak:
         if not shutil.which("pw-play"):
             sys.exit("pw-play が無いので鳴らせない（登録は済んだ）")
-        wav = call("POST", "/synthesis", data=json.dumps(q).encode(), speaker=SPEAKER)
+        wav = call("POST", "/synthesis", data=json.dumps(q).encode(), speaker=speaker())
         if subprocess.run(["pw-play", "-"], input=wav).returncode:
             sys.exit("pw-play が失敗した（登録は済んだ）")
 
@@ -261,3 +304,30 @@ def import_(file):
     call("POST", "/import_user_dict", data=file.read(), override="true")
     print("読み込んだ")
     save()
+
+
+@click.command()
+@click.argument("args", nargs=-1)
+@click.option("--list", "show_list", is_flag=True, help="エンジンの話者を番号・名前・スタイルで一覧する")
+def speaker_(args, show_list):
+    """読み上げの話者を、番号か、名前とスタイルで決める（例: 119、夜語トバリ 明るい）。
+
+    スタイルを省くと、その話者の最初のスタイル。引数なしは今の話者を表示する。次の読み上げから効く。
+    """
+    if len(args) > 2 or (show_list and args):
+        raise click.UsageError("引数は、番号 1 つか、名前とスタイル。--list とは一緒に使えない")
+    found = styles()
+    if show_list:
+        for i, n, s in found:
+            print(f"{i}  {n}  {s}")
+        return
+    if args:
+        sid = pick(args, found)
+        if sid is None:
+            sys.exit(f"エンジンの話者に無い: {' '.join(args)}（ccspk speaker --list で一覧する）")
+        SPEAKER_FILE.parent.mkdir(parents=True, exist_ok=True)
+        tmp = SPEAKER_FILE.with_suffix(".tmp")  # 書いている途中に読まれても、前の番号で読むように
+        tmp.write_text(f"{sid}\n")
+        tmp.replace(SPEAKER_FILE)
+    sid = speaker()
+    print(next((f"{i}  {n}  {s}" for i, n, s in found if i == sid), f"{sid}  （エンジンの話者に無い）"))

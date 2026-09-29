@@ -1,0 +1,113 @@
+== 1
+ok
+ok
+ok
+[exit 0]
+== 2
+$ ccspk speaker
+119  夜語トバリ  明るい
+[exit 0]
+$ ccspk speaker 3
+3  ずんだもん  ノーマル
+[exit 0]
+3
+$ ccspk speaker ずんだもん
+3  ずんだもん  ノーマル
+[exit 0]
+3
+$ ccspk speaker 夜語トバリ 呆れ
+121  夜語トバリ  呆れ
+[exit 0]
+121
+/tmp/claude-649/-home-ytani-work-ccspk/02ea16d1-85da-4c91-b122-8492a0d5f5ad/scratchpad/v43/c
+/tmp/claude-649/-home-ytani-work-ccspk/02ea16d1-85da-4c91-b122-8492a0d5f5ad/scratchpad/v43/c/ccspk
+/tmp/claude-649/-home-ytani-work-ccspk/02ea16d1-85da-4c91-b122-8492a0d5f5ad/scratchpad/v43/c/ccspk/speaker
+== 3
+$ ccspk speaker 99999
+エンジンの話者に無い: 99999（ccspk speaker --list で一覧する）
+[exit 1]
+121
+$ ccspk speaker 存在しない名前
+エンジンの話者に無い: 存在しない名前（ccspk speaker --list で一覧する）
+[exit 1]
+121
+$ ccspk speaker 夜語トバリ ツンツン
+エンジンの話者に無い: 夜語トバリ ツンツン（ccspk speaker --list で一覧する）
+[exit 1]
+121
+$ ccspk speaker a b c
+Usage: ccspk speaker [OPTIONS] [ARGS]...
+Try 'ccspk speaker --help' for help.
+
+Error: 引数は、番号 1 つか、名前とスタイル。--list とは一緒に使えない
+[exit 2]
+121
+$ ccspk speaker --list 3
+Usage: ccspk speaker [OPTIONS] [ARGS]...
+Try 'ccspk speaker --help' for help.
+
+Error: 引数は、番号 1 つか、名前とスタイル。--list とは一緒に使えない
+[exit 2]
+121
+== 4
+127
+127
+== 5
+$ ccspk speaker
+119  夜語トバリ  明るい
+[exit 0]
+== 6
+Exception in thread Thread-1 (produce):
+Traceback (most recent call last):
+  File "/home/ytani/.local/share/uv/python/cpython-3.14.7-linux-x86_64-gnu/lib/python3.14/threading.py", line 1082, in _bootstrap_inner
+    self._context.run(self.run)
+    ~~~~~~~~~~~~~~~~~^^^^^^^^^^
+  File "/home/ytani/.local/share/uv/python/cpython-3.14.7-linux-x86_64-gnu/lib/python3.14/threading.py", line 1024, in run
+    self._target(*self._args, **self._kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ytani/work/ccspk/src/ccspk/hook.py", line 476, in produce
+    wavs.put(synthesize(s, sid))
+             ~~~~~~~~~~^^^^^^^^
+  File "/home/ytani/work/ccspk/src/ccspk/hook.py", line 446, in synthesize
+    query = urllib.request.urlopen(
+            ~~~~~~~~~~~~~~~~~~~~~~^
+        urllib.request.Request(
+        ^^^^^^^^^^^^^^^^^^^^^^^
+    ...<5 lines>...
+        timeout=60,
+        ^^^^^^^^^^^
+    ).read()
+    ^
+  File "/tmp/claude-649/-home-ytani-work-ccspk/02ea16d1-85da-4c91-b122-8492a0d5f5ad/scratchpad/v43/six.py", line 4, in fake
+    urls.append(req.full_url if hasattr(req,'full_url') else req); raise RuntimeError("stop")
+                                                                   ^^^^^^^^^^^^^^^^^^^^^^^^^^
+RuntimeError: stop
+play url: ['http://127.0.0.1:50021/audio_query?speaker=3&text=%E3%83%86%E3%82%B9%E3%83%88%E3%80%82']
+query: [(('POST', '/audio_query'), {'speaker': 3, 'text': 'テスト'})]
+Exception in thread Thread-1 (produce):
+Traceback (most recent call last):
+  File "/home/ytani/.local/share/uv/python/cpython-3.14.7-linux-x86_64-gnu/lib/python3.14/threading.py", line 1082, in _bootstrap_inner
+    self._context.run(self.run)
+    ~~~~~~~~~~~~~~~~~^^^^^^^^^^
+  File "/home/ytani/.local/share/uv/python/cpython-3.14.7-linux-x86_64-gnu/lib/python3.14/threading.py", line 1024, in run
+    self._target(*self._args, **self._kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ytani/work/ccspk/src/ccspk/hook.py", line 476, in produce
+    wavs.put(synthesize(s, sid))
+             ~~~~~~~~~~^^^^^^^^
+  File "/home/ytani/work/ccspk/src/ccspk/hook.py", line 446, in synthesize
+    query = urllib.request.urlopen(
+            ~~~~~~~~~~~~~~~~~~~~~~^
+        urllib.request.Request(
+        ^^^^^^^^^^^^^^^^^^^^^^^
+    ...<5 lines>...
+        timeout=60,
+        ^^^^^^^^^^^
+    ).read()
+    ^
+  File "/tmp/claude-649/-home-ytani-work-ccspk/02ea16d1-85da-4c91-b122-8492a0d5f5ad/scratchpad/v43/six.py", line 4, in fake
+    urls.append(req.full_url if hasattr(req,'full_url') else req); raise RuntimeError("stop")
+                                                                   ^^^^^^^^^^^^^^^^^^^^^^^^^^
+RuntimeError: stop
+play url: ['http://127.0.0.1:50021/audio_query?speaker=119&text=%E3%83%86%E3%82%B9%E3%83%88%E3%80%82']
+query: [(('POST', '/audio_query'), {'speaker': 119, 'text': 'テスト'})]

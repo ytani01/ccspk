@@ -1,0 +1,480 @@
+diff --git a/CLAUDE.md b/CLAUDE.md
+index d113904..1fa4439 100644
+--- a/CLAUDE.md
++++ b/CLAUDE.md
+@@ -3,7 +3,7 @@
+ This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+ 
+ Claude Code の返答の冒頭を、手元の VOICEVOX で読み上げるフック。コマンドは
+-`ccspk`（`hook`・`say`・`stop`・`status`・`summary`・`queue`・`translate`・`test`・`dict` のサブコマンド。`cli.py` がまとめる）。
++`ccspk`（`hook`・`say`・`stop`・`status`・`summary`・`queue`・`translate`・`speaker`・`test`・`dict` のサブコマンド。`cli.py` がまとめる）。
+ 仕組みとテストは `docs/Developer.md`、インストールと辞書は `docs/UsersGuide.md` にある。
+ 
+ ## コマンド
+diff --git a/README.md b/README.md
+index bd27305..9c6f3bf 100644
+--- a/README.md
++++ b/README.md
+@@ -1,6 +1,6 @@
+ # ccspk
+ 
+-Claude Code の返答を、手元の VOICEVOX（夜語トバリ・明るい）で読み上げるフック。
++Claude Code の返答を、手元の VOICEVOX（既定は夜語トバリ・明るい）で読み上げるフック。
+ 長い返答は要約し、英文の返答は日本語に訳して読む。
+ 
+ ## 1. 特徴
+@@ -30,6 +30,7 @@ Claude Code の返答を、手元の VOICEVOX（夜語トバリ・明るい）
+ - `ccspk summary` で、長い返答を要約して読むかを切り替える
+ - `ccspk queue` で、前の読み上げを止めずに来た順に読むかを切り替える
+ - `ccspk translate` で、英文の返答を日本語に訳して読むかを切り替える
++- `ccspk speaker` で、読み上げの話者を変える
+ 
+ ## 3. 注意事項
+ 
+diff --git a/docs/Developer.md b/docs/Developer.md
+index 72740a9..c692427 100644
+--- a/docs/Developer.md
++++ b/docs/Developer.md
+@@ -14,7 +14,7 @@
+ | `pyproject.toml` | コマンド `ccspk` の定義（`uv tool install` で入れる） |
+ | `src/ccspk/cli.py` | サブコマンドをまとめる。`ccspk test` もここにある |
+ | `src/ccspk/hook.py` | `ccspk hook`・`say`・`stop`・`status`・`summary`・`queue`・`translate`。Stop・MessageDisplay・PreToolUse フックとして、返答の冒頭と質問の文を VOICEVOX で読み上げる |
+-| `src/ccspk/user_dict.py` | `ccspk dict`。VOICEVOX のユーザー辞書を操作する |
++| `src/ccspk/user_dict.py` | `ccspk dict`・`speaker`。VOICEVOX のユーザー辞書を操作する。読み上げの話者（`speaker()`）もここで決める |
+ | `src/ccspk/check.py` | 読み間違いの自動の点検（`python -m ccspk.check`）。フックが読み上げた文を記録し、Stop で裏で起こす（[「3.8 自動の点検」](#38-自動の点検)） |
+ | `src/ccspk/__init__.py` | `__version__`（`--version` で出す版） |
+ | `src/ccspk/click_utils.py` | `--debug`・`--version` などの共通オプション |
+@@ -303,7 +303,6 @@ PID で待たずに pidfd で待つのは、前の子プロセスが終わって
+ | `EXTEND` | 60 | 文末を探して延ばすのは、`LIMIT` からこの字数まで。延ばしすぎると、エンジンが 1 回の合成でメモリを使い切る |
+ | `ENDS` | `。！？!?` | 文末 |
+ | `COMMAS` | `、，` | 読点。半角の `,` は `1,000` のように数字の中にも出るので入れない |
+-| `SPEAKER` | 119 | 話者（夜語トバリ・明るい） |
+ | `ENGINE` | `http://127.0.0.1:50021` | エンジンの URL |
+ | `PLAY` | `--play` | 子プロセスの目印。`stop_playing()` は `MODULE` と合わせて見分ける |
+ | `MODULE` | `ccspk.hook` | 子プロセスが `python -m` で起こすモジュール。`stop_playing()` の目印にもなる |
+@@ -328,7 +327,9 @@ PID で待たずに pidfd で待つのは、前の子プロセスが終わって
+ | `PARTS_KEEP` | 600 | そろわないまま残った MessageDisplay の分は、この秒数で消す |
+ | `SAME_WITHIN` | 5 | 読んでからこの秒数のうちに同じ文が来たら読まない。長くすると、続けて同じ返答（「はい。」など）が来たときに黙ってしまう |
+ 
+-`ENGINE` と `SPEAKER` は `user_dict.py` にもあり、`hook.py` と揃える。
++`ENGINE` は `user_dict.py` にもあり、`hook.py` と揃える。
++
++話者は `user_dict.speaker()` が決める。`SPEAKER_FILE`（`~/.config/ccspk/speaker`。`ccspk speaker` が書く）の番号で、無い・数でないときは `SPEAKER`（119、夜語トバリ・明るい）。フックの子プロセスと `say` は `play()` の初めに 1 回だけ読み、`dict add --speak` と読み間違いの点検（`user_dict.query()`）は呼ぶたびに読む。`ccspk speaker` はエンジンの `/speakers` を `styles()` で (番号, 名前, スタイル) に並べ、`pick()` で引数から番号を引く。
+ 
+ ### 3.8 自動の点検
+ 
+@@ -441,7 +442,7 @@ hook の `demo()` は、整形と分割（`to_speech`、`drop_commit_ids`、`cli
+ `assemble()`（一時ディレクトリで）、要約の切り替え（`summary_on`）、英文の見分け（`english`）、要約・翻訳させるかの分かれ目（`prepare`）、
+ 子プロセスの振り分け（`child_args`・`run_child`。`--after=` の pidfd のプロセスが終わるまで鳴らさないことも）、子プロセスを全部止める `stop_playing()`（偽の子プロセスで。使い回された番号は触らない）と `playing()`、`switch()`、要約と翻訳（`rewrite`。`PATH` の先頭に置いた偽の `claude` で、渡す指示、失敗・空・時間切れも。
+ `claude` が無い例は `PATH` を一時ディレクトリだけにし、本物を起こさない）を `assert` で確かめている（pytest ではない）。
+-dict の `demo()` は、アクセントの位置の決め方（`accent_of`）と、全角から半角へ戻す `halfwidth` を確かめている。
++dict の `demo()` は、アクセントの位置の決め方（`accent_of`）、全角から半角へ戻す `halfwidth`、話者の番号の引き方（`pick`）と、話者のファイルが無い・数でないときの既定（`speaker`。一時ディレクトリで）を確かめている。
+ check の `demo()` は、単語の切り出し（`extract`）、`claude` の返答の読み取り（`parse`）、点検を起こす条件
+ （`pending`）と `SPOKEN` の切り詰め（`record`）を確かめている（後の 2 つは一時ディレクトリで）。
+ 通れば `ok` と出る。個別に走らせる手段は無い。lint の設定は無い。
+diff --git a/docs/UsersGuide.md b/docs/UsersGuide.md
+index 54a2d5a..8183b86 100644
+--- a/docs/UsersGuide.md
++++ b/docs/UsersGuide.md
+@@ -55,7 +55,7 @@ unit ファイルのパスを揃えて書き換え、`systemctl --user daemon-re
+ （unit ファイルの `ExecStartPost`。`~/.local/bin/ccspk` を使うので、先に `ccspk` を
+ インストールしておく）。詳しくは [辞書のファイル](#21-辞書のファイル)。
+ 
+-整形が正しく動くかは [`ccspk test`](#39-ccspk-test) で確認できる。
++整形が正しく動くかは [`ccspk test`](#310-ccspk-test) で確認できる。
+ 
+ ### 1.2 Claude Code の設定
+ 
+@@ -147,10 +147,15 @@ Claude（Sonnet）に日本語へ訳させてから読む（[`ccspk translate`](
+ 訳す返答では、最初の音が 5 秒ほど遅れ、1 回に入力 3,000〜6,500・出力 約 250 トークンを使う。返答の最後の文章だけでなく、
+ 途中の文章や質問も訳すので、英語で作業するとそのたびに使う。
+ 
++### 1.9 話者を変える
++
++読み上げの話者は、既定では夜語トバリ（明るい、119）。`ccspk speaker --list` でエンジンの話者を一覧し、
++`ccspk speaker 3` か `ccspk speaker ずんだもん ノーマル` のように決める（[`ccspk speaker`](#39-ccspk-speaker)）。
++
+ ## 2. 読み上げの辞書
+ 
+ 返答の読み上げで読み間違える単語は、VOICEVOX のエンジンのユーザー辞書で読みを直す。
+-操作はどれも [`ccspk dict`](#310-ccspk-dict) のサブコマンドで行う。
++操作はどれも [`ccspk dict`](#311-ccspk-dict) のサブコマンドで行う。
+ 
+ 1. `ccspk dict kana` で、エンジンが今どう読むかを確認する
+ 2. `ccspk dict add` で表記と読みを登録する。登録後の読みが表示される
+@@ -205,7 +210,7 @@ ccspk dict add README リードミー --speak
+ ### 2.3 読み間違いの自動の点検
+ 
+ 読み上げた文から単語を切り出し、読み間違いを Claude（Opus）に判定させて、誤りは辞書に登録する。
+-確認は挟まない。登録した単語は [`ccspk dict auto`](#315-ccspk-dict-auto) で見直し、まとめて消せる。
++確認は挟まない。登録した単語は [`ccspk dict auto`](#316-ccspk-dict-auto) で見直し、まとめて消せる。
+ 
+ - 点検するのは、英字を含む単語（`README.md`・`v1.2` など。1 字は除く）と、漢字を含む 2 字以上の名詞
+   （`優先度`・`作業中` など）。動詞の活用形（`試さ`）と 1 字の漢字（`行`）は、文によって読みが
+@@ -525,7 +530,61 @@ $ ccspk translate
+ on
+ ```
+ 
+-### 3.9 ccspk test
++### 3.9 ccspk speaker
++
++```
++ccspk speaker [番号 | 名前 [スタイル]]
++ccspk speaker --list
++```
++
++**説明**
++
++読み上げの話者（[1.9](#19-話者を変える)）を、番号か、名前とスタイルで決める。スタイルを省くと、その話者の最初のスタイル。
++決めた後の話者を `番号  名前  スタイル` で表示する。引数が無ければ今の話者を表示する。
++次の読み上げから効き、フック・[`ccspk say`](#33-ccspk-say)・[`ccspk dict add --speak`](#313-ccspk-dict-add)・
++[読み間違いの自動の点検](#23-読み間違いの自動の点検)のすべてが使う。読んでいる途中で変えても、その読み上げの声は変わらない。
++
++どの使い方もエンジン（127.0.0.1:50021）に接続し、`/speakers` にある番号・名前だけを受け付ける。
++エンジンに接続できないときは、理由を表示して終わる。
++
++**引数**
++
++- `番号` — 話者のスタイルの番号（`--list` の 1 列目）
++- `名前` — 話者の名前（`--list` の 2 列目）。完全に一致するものだけ
++- `スタイル` — スタイルの名前（`--list` の 3 列目）
++
++**オプション**
++
++- `--list` — エンジンの話者を、1 行に 1 スタイルずつ `番号  名前  スタイル` で一覧する。引数とは一緒に使えない
++
++**終了ステータス**
++
++- `0` — 成功
++- `1` — エンジンに無い番号・名前、またはエンジンとやり取りできない
++- `2` — 引数の誤り（3 つ以上、または `--list` と一緒に渡した）
++
++**ファイル**
++
++- `~/.config/ccspk/speaker` — 決めた話者の番号（`$XDG_CONFIG_HOME` があれば `$XDG_CONFIG_HOME/ccspk/speaker`）。
++  無い・数でないときは 119。エンジンに無い番号が書いてあると（エンジンから話者を外したときなど）、読み上げが鳴らず、
++  `dict kana`・`dict add` と読み間違いの点検もエンジンに断られる。`ccspk speaker` で選び直す
++
++**例**
++
++```console
++$ ccspk speaker
++119  夜語トバリ  明るい
++$ ccspk speaker --list
++2  四国めたん  ノーマル
++0  四国めたん  あまあま
++...
++$ ccspk speaker ずんだもん
++3  ずんだもん  ノーマル
++$ ccspk speaker 夜語トバリ 明るい
++119  夜語トバリ  明るい
++```
++
++### 3.10 ccspk test
+ 
+ ```
+ ccspk test
+@@ -550,7 +609,7 @@ ok
+ ok
+ ```
+ 
+-### 3.10 ccspk dict
++### 3.11 ccspk dict
+ 
+ ```
+ ccspk dict COMMAND [ARGS]...
+@@ -563,7 +622,7 @@ VOICEVOX のエンジンのユーザー辞書を操作する。どのサブコ
+ `dict add`・`dict remove`・`dict import`・`dict auto --remove` は、成功すると、エンジンの辞書を
+ [辞書のファイル](#21-辞書のファイル)へ書き出し、「書き出した: パス」と表示する。
+ 
+-### 3.11 ccspk dict kana
++### 3.12 ccspk dict kana
+ 
+ ```
+ ccspk dict kana TEXT
+@@ -591,7 +650,7 @@ $ ccspk dict kana 'Ponytail を使う'
+ ポ'ニテイル、オ'/_ツカウ'
+ ```
+ 
+-### 3.12 ccspk dict add
++### 3.13 ccspk dict add
+ 
+ ```
+ ccspk dict add [--accent N] [--type TYPE] [--priority N] [--speak] SURFACE PRONUNCIATION
+@@ -643,7 +702,7 @@ $ ccspk dict add Ponytail ポニーテール
+ 読み: ポニイテ'エル
+ ```
+ 
+-### 3.13 ccspk dict list
++### 3.14 ccspk dict list
+ 
+ ```
+ ccspk dict list
+@@ -669,7 +728,7 @@ e8587f70-4e27-4017-aa5c-7c5bfdf4251f  README  リードミー  1  5
+ …
+ ```
+ 
+-### 3.14 ccspk dict remove
++### 3.15 ccspk dict remove
+ 
+ ```
+ ccspk dict remove SURFACE
+@@ -701,7 +760,7 @@ $ ccspk dict remove Ponytail
+ 書き出した: /home/user/.config/ccspk/user_dict.json
+ ```
+ 
+-### 3.15 ccspk dict auto
++### 3.16 ccspk dict auto
+ 
+ ```
+ ccspk dict auto [--remove]
+@@ -711,8 +770,8 @@ ccspk dict auto [--remove]
+ 
+ [自動の点検](#23-読み間違いの自動の点検)で登録した単語を、登録した順に 1 単語 1 行で一覧する
+ （日時・表記・正しい読み・エンジンの元の読み）。無ければ「自動で登録した単語は無い」と表示する。
+-1 つずつ消すなら [`ccspk dict remove`](#314-ccspk-dict-remove)、読みを直すなら
+-[`ccspk dict add`](#312-ccspk-dict-add) を使う。どちらも、その単語を一覧から外す。
++1 つずつ消すなら [`ccspk dict remove`](#315-ccspk-dict-remove)、読みを直すなら
++[`ccspk dict add`](#313-ccspk-dict-add) を使う。どちらも、その単語を一覧から外す。
+ 
+ **オプション**
+ 
+@@ -740,7 +799,7 @@ $ ccspk dict auto --remove
+ 書き出した: /home/user/.config/ccspk/user_dict.json
+ ```
+ 
+-### 3.16 ccspk dict export
++### 3.17 ccspk dict export
+ 
+ ```
+ ccspk dict export [FILE]
+@@ -766,7 +825,7 @@ ccspk dict export [FILE]
+ ccspk dict export backup.json
+ ```
+ 
+-### 3.17 ccspk dict import
++### 3.18 ccspk dict import
+ 
+ ```
+ ccspk dict import [FILE]
+diff --git a/src/ccspk/cli.py b/src/ccspk/cli.py
+index 4b9a3f2..3a34b6b 100644
+--- a/src/ccspk/cli.py
++++ b/src/ccspk/cli.py
+@@ -1,4 +1,4 @@
+-"""ccspk のエントリポイント。サブコマンド hook・say・stop・status・summary・queue・translate・test・dict をまとめる。"""
++"""ccspk のエントリポイント。サブコマンド hook・say・stop・status・summary・queue・translate・speaker・test・dict をまとめる。"""
+ 
+ import click
+ 
+@@ -10,7 +10,7 @@ from .hook import main as hook
+ from .hook import queue_, say, status, stop, summary, translate
+ from .mylog import getLogger, loggerInit
+ from .user_dict import demo as dict_demo
+-from .user_dict import dict_group
++from .user_dict import dict_group, speaker_
+ 
+ _log = getLogger("main")
+ 
+@@ -38,6 +38,7 @@ cli.add_command(status, name="status")
+ cli.add_command(summary, name="summary")
+ cli.add_command(queue_, name="queue")
+ cli.add_command(translate, name="translate")
++cli.add_command(speaker_, name="speaker")
+ cli.add_command(dict_group, name="dict")
+ 
+ 
+diff --git a/src/ccspk/hook.py b/src/ccspk/hook.py
+index 26c4420..2c9204e 100755
+--- a/src/ccspk/hook.py
++++ b/src/ccspk/hook.py
+@@ -32,7 +32,7 @@ import click
+ 
+ from . import check
+ from .mylog import getLogger
+-from .user_dict import DICT_FILE, STATE
++from .user_dict import DICT_FILE, STATE, speaker
+ 
+ LIMIT = 180  # 読み上げるのはおよそここまで。超えるときは次の文末（無ければ読点）まで
+ # 延ばすのはここまで。句点の無い英語の返答 2,339 字を 1 回で合成しようとして、
+@@ -40,7 +40,6 @@ LIMIT = 180  # 読み上げるのはおよそここまで。超えるときは
+ EXTEND = 60
+ ENDS = "。！？!?"  # 文末
+ COMMAS = "、，"  # 読点。半角の「,」は 1,000 のような数字の中にも出るので入れない
+-SPEAKER = 119  # 夜語トバリ（明るい）
+ ENGINE = "http://127.0.0.1:50021"
+ PLAY = "--play"  # 合成と再生を受け持つ子プロセスの目印
+ MODULE = "ccspk.hook"  # 子プロセスは python -m でこのモジュールを起こす。ours() はこれで見分ける
+@@ -442,11 +441,11 @@ def squeeze(chunk):
+     )
+ 
+ 
+-def synthesize(sentence):
+-    """1 文を合成して wav のバイト列を返す。"""
++def synthesize(sentence, sid):
++    """1 文を話者 sid で合成して wav のバイト列を返す。"""
+     query = urllib.request.urlopen(
+         urllib.request.Request(
+-            f"{ENGINE}/audio_query?speaker={SPEAKER}&text=" + urllib.parse.quote(sentence),
++            f"{ENGINE}/audio_query?speaker={sid}&text=" + urllib.parse.quote(sentence),
+             method="POST",
+         ),
+         # エンジンは要求を 1 つずつ処理し、止めた前の返答の合成も最後まで続ける。
+@@ -456,7 +455,7 @@ def synthesize(sentence):
+     return urllib.request.urlopen(
+         urllib.request.Request(
+             # 「？」「?」で終わる文に語尾を上げる「ァ」を足させない（「かぁ」と伸びて聞こえる）
+-            f"{ENGINE}/synthesis?speaker={SPEAKER}&enable_interrogative_upspeak=false",
++            f"{ENGINE}/synthesis?speaker={sid}&enable_interrogative_upspeak=false",
+             data=query,
+             headers={"Content-Type": "application/json"},
+         ),
+@@ -467,13 +466,14 @@ def synthesize(sentence):
+ def play(text):
+     """1 文目ができたらすぐ鳴らし、2 文目以降は鳴らしている間に合成する。"""
+     wavs = queue.Queue()
++    sid = speaker()  # 読んでいる途中で ccspk speaker を変えても、声は変えない
+ 
+     def produce():
+         # エンジンが動いていない、応答が途中で切れた、など何で止まっても、
+         # 鳴らす側が待ち続けないよう終わりの印は必ず入れる
+         try:
+             for s in chunks(text):
+-                wavs.put(synthesize(s))
++                wavs.put(synthesize(s, sid))
+         finally:
+             wavs.put(None)
+ 
+diff --git a/src/ccspk/user_dict.py b/src/ccspk/user_dict.py
+index 2aaca26..d62853b 100755
+--- a/src/ccspk/user_dict.py
++++ b/src/ccspk/user_dict.py
+@@ -7,12 +7,14 @@
+   ccspk dict auto [--remove]
+   ccspk dict export [FILE]
+   ccspk dict import [FILE]
++  ccspk speaker [番号 | 名前 [スタイル]] [--list]
+ 
+ `add` はアクセントの位置を、読みを /audio_query に渡してエンジンに任せる。
+ 同じ表記が登録済みなら、読みを書き換える。登録後の読みを表示し、--speak で鳴らす。
+ `add`・`remove`・`import` が成功したら、エンジンの辞書を DICT_FILE
+ （~/.config/ccspk/user_dict.json）へ書き出す。エンジンの起動時に systemd がこれを `import` する
+ （systemd/voicevox-engine.service の ExecStartPost）。
++`speaker` は読み上げの話者を SPEAKER_FILE に残す。フック・say・dict add --speak・読み間違いの点検が使う。
+ """
+ 
+ import json
+@@ -20,6 +22,7 @@ import os
+ import shutil
+ import subprocess
+ import sys
++import tempfile
+ import unicodedata
+ import urllib.error
+ import urllib.parse
+@@ -33,8 +36,9 @@ from .mylog import getLogger
+ _log = getLogger("dict")
+ 
+ ENGINE = "http://127.0.0.1:50021"
+-SPEAKER = 119  # 夜語トバリ（明るい）。hook.py と揃える
++SPEAKER = 119  # 夜語トバリ（明るい）。ccspk speaker で決めていないときの話者
+ DICT_FILE = Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config") / "ccspk" / "user_dict.json"
++SPEAKER_FILE = DICT_FILE.parent / "speaker"  # ccspk speaker で決めた話者の番号
+ # 自動の点検（check.py）の状態のディレクトリと、自動で登録した単語の一覧
+ # （日時<TAB>表記<TAB>正しい読み<TAB>エンジンの元の読み）
+ STATE = Path(os.environ.get("XDG_STATE_HOME") or Path.home() / ".local/state") / "ccspk"
+@@ -62,7 +66,29 @@ def call(method, path, data=None, **params):
+ 
+ 
+ def query(text):
+-    return json.loads(call("POST", "/audio_query", speaker=SPEAKER, text=text))
++    return json.loads(call("POST", "/audio_query", speaker=speaker(), text=text))
++
++
++def speaker():
++    """話者の番号。SPEAKER_FILE が無い・読めない・数でないときは SPEAKER。"""
++    try:
++        return int(SPEAKER_FILE.read_text())
++    except (OSError, ValueError):
++        return SPEAKER
++
++
++def styles():
++    """エンジンの話者を (番号, 名前, スタイル) で、エンジンの並び順に返す。"""
++    return [(s["id"], p["name"], s["name"]) for p in json.loads(call("GET", "/speakers")) for s in p["styles"]]
++
++
++def pick(args, found):
++    """番号 1 つか、名前（とスタイル）から、found（styles() の形）にある番号を返す。無ければ None。
++    スタイルを省いたら、その話者の最初のスタイル。"""
++    if len(args) == 1 and args[0].isdecimal():
++        return next((i for i, _n, _s in found if i == int(args[0])), None)
++    name, style = args[0], args[1] if len(args) > 1 else None
++    return next((i for i, n, s in found if n == name and style in (None, s)), None)
+ 
+ 
+ def accent_of(phrases):
+@@ -157,6 +183,23 @@ def demo():
+     assert accent_of([ph(2, 2), ph(1, 3)]) == 2  # 先頭の句の最後でも、句が 2 つなら平板にしない
+     assert halfwidth("！／ｅｔｃ／ＴＯＤＯ－０１～") == "!/etc/TODO-01~"  # 範囲の両端も
+     assert halfwidth("ｶﾅ　語") == "ｶﾅ　語"  # 半角カナと全角スペースは変えない
++    found = [(2, "四国めたん", "ノーマル"), (0, "四国めたん", "あまあま"), (118, "夜語トバリ", "ノーマル"), (119, "夜語トバリ", "明るい")]
++    assert pick(("119",), found) == 119 and pick(("１１８",), found) == 118 and pick(("0",), found) == 0
++    assert pick(("5",), found) is None  # エンジンに無い番号
++    assert pick(("夜語トバリ", "明るい"), found) == 119 and pick(("四国めたん",), found) == 2  # 省くと最初のスタイル
++    assert pick(("夜語トバリ", "あまあま"), found) is None and pick(("夜語",), found) is None
++    # 話者のファイル。無い・数でないときは SPEAKER
++    global SPEAKER_FILE
++    saved, SPEAKER_FILE = SPEAKER_FILE, Path(tempfile.mkdtemp()) / "speaker"
++    try:
++        assert speaker() == SPEAKER
++        SPEAKER_FILE.write_text("3\n")
++        assert speaker() == 3
++        SPEAKER_FILE.write_text("x\n")
++        assert speaker() == SPEAKER
++    finally:
++        shutil.rmtree(SPEAKER_FILE.parent)
++        SPEAKER_FILE = saved
+     print("ok")
+ 
+ 
+@@ -185,7 +228,7 @@ def add(surface, pronunciation, accent, type_, priority, speak):
+     if speak:
+         if not shutil.which("pw-play"):
+             sys.exit("pw-play が無いので鳴らせない（登録は済んだ）")
+-        wav = call("POST", "/synthesis", data=json.dumps(q).encode(), speaker=SPEAKER)
++        wav = call("POST", "/synthesis", data=json.dumps(q).encode(), speaker=speaker())
+         if subprocess.run(["pw-play", "-"], input=wav).returncode:
+             sys.exit("pw-play が失敗した（登録は済んだ）")
+ 
+@@ -261,3 +304,30 @@ def import_(file):
+     call("POST", "/import_user_dict", data=file.read(), override="true")
+     print("読み込んだ")
+     save()
++
++
++@click.command()
++@click.argument("args", nargs=-1)
++@click.option("--list", "show_list", is_flag=True, help="エンジンの話者を番号・名前・スタイルで一覧する")
++def speaker_(args, show_list):
++    """読み上げの話者を、番号か、名前とスタイルで決める（例: 119、夜語トバリ 明るい）。
++
++    スタイルを省くと、その話者の最初のスタイル。引数なしは今の話者を表示する。次の読み上げから効く。
++    """
++    if len(args) > 2 or (show_list and args):
++        raise click.UsageError("引数は、番号 1 つか、名前とスタイル。--list とは一緒に使えない")
++    found = styles()
++    if show_list:
++        for i, n, s in found:
++            print(f"{i}  {n}  {s}")
++        return
++    if args:
++        sid = pick(args, found)
++        if sid is None:
++            sys.exit(f"エンジンの話者に無い: {' '.join(args)}（ccspk speaker --list で一覧する）")
++        SPEAKER_FILE.parent.mkdir(parents=True, exist_ok=True)
++        tmp = SPEAKER_FILE.with_suffix(".tmp")  # 書いている途中に読まれても、前の番号で読むように
++        tmp.write_text(f"{sid}\n")
++        tmp.replace(SPEAKER_FILE)
++    sid = speaker()
++    print(next((f"{i}  {n}  {s}" for i, n, s in found if i == sid), f"{sid}  （エンジンの話者に無い）"))

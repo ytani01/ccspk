@@ -32,7 +32,7 @@ import click
 
 from . import check
 from .mylog import getLogger
-from .user_dict import DICT_FILE, STATE
+from .user_dict import DICT_FILE, STATE, speaker
 
 LIMIT = 180  # 読み上げるのはおよそここまで。超えるときは次の文末（無ければ読点）まで
 # 延ばすのはここまで。句点の無い英語の返答 2,339 字を 1 回で合成しようとして、
@@ -40,7 +40,6 @@ LIMIT = 180  # 読み上げるのはおよそここまで。超えるときは�
 EXTEND = 60
 ENDS = "。！？!?"  # 文末
 COMMAS = "、，"  # 読点。半角の「,」は 1,000 のような数字の中にも出るので入れない
-SPEAKER = 119  # 夜語トバリ（明るい）
 ENGINE = "http://127.0.0.1:50021"
 PLAY = "--play"  # 合成と再生を受け持つ子プロセスの目印
 MODULE = "ccspk.hook"  # 子プロセスは python -m でこのモジュールを起こす。ours() はこれで見分ける
@@ -442,11 +441,11 @@ def squeeze(chunk):
     )
 
 
-def synthesize(sentence):
-    """1 文を合成して wav のバイト列を返す。"""
+def synthesize(sentence, sid):
+    """1 文を話者 sid で合成して wav のバイト列を返す。"""
     query = urllib.request.urlopen(
         urllib.request.Request(
-            f"{ENGINE}/audio_query?speaker={SPEAKER}&text=" + urllib.parse.quote(sentence),
+            f"{ENGINE}/audio_query?speaker={sid}&text=" + urllib.parse.quote(sentence),
             method="POST",
         ),
         # エンジンは要求を 1 つずつ処理し、止めた前の返答の合成も最後まで続ける。
@@ -456,7 +455,7 @@ def synthesize(sentence):
     return urllib.request.urlopen(
         urllib.request.Request(
             # 「？」「?」で終わる文に語尾を上げる「ァ」を足させない（「かぁ」と伸びて聞こえる）
-            f"{ENGINE}/synthesis?speaker={SPEAKER}&enable_interrogative_upspeak=false",
+            f"{ENGINE}/synthesis?speaker={sid}&enable_interrogative_upspeak=false",
             data=query,
             headers={"Content-Type": "application/json"},
         ),
@@ -467,13 +466,14 @@ def synthesize(sentence):
 def play(text):
     """1 文目ができたらすぐ鳴らし、2 文目以降は鳴らしている間に合成する。"""
     wavs = queue.Queue()
+    sid = speaker()  # 読んでいる途中で ccspk speaker を変えても、声は変えない
 
     def produce():
         # エンジンが動いていない、応答が途中で切れた、など何で止まっても、
         # 鳴らす側が待ち続けないよう終わりの印は必ず入れる
         try:
             for s in chunks(text):
-                wavs.put(synthesize(s))
+                wavs.put(synthesize(s, sid))
         finally:
             wavs.put(None)
 

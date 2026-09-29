@@ -1,6 +1,6 @@
 # ccspk
 
-Claude Code の返答を、手元の VOICEVOX（夜語トバリ・明るい）で読み上げるフック。
+Claude Code の返答を、手元の VOICEVOX（既定は夜語トバリ・明るい）で読み上げるフック。
 長い返答は要約し、英文の返答は日本語に訳して読む。
 
 ## 1. 特徴
@@ -30,6 +30,7 @@ Claude Code の返答を、手元の VOICEVOX（夜語トバリ・明るい）�
 - `ccspk summary` で、長い返答を要約して読むかを切り替える
 - `ccspk queue` で、前の読み上げを止めずに来た順に読むかを切り替える
 - `ccspk translate` で、英文の返答を日本語に訳して読むかを切り替える
+- `ccspk speaker` で、読み上げの話者を変える
 
 ## 3. 注意事項
 
