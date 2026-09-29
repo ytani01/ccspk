@@ -1,7 +1,7 @@
 # TODO
 
-**残っている項目: TODO-048、TODO-057。** これまでに 55 件を決着させた。
-新しく足すときは「完了済み」の上に節を作る。**番号は `TODO-058` から。**
+**残っている項目: TODO-048、TODO-057、TODO-058。** これまでに 55 件を決着させた。
+新しく足すときは「完了済み」の上に節を作る。**番号は `TODO-059` から。**
 
 ---
 
@@ -45,6 +45,34 @@
 
 - `src/ccspk/cli.py` の `test` は `hook_demo()`・`dict_demo()`・`check_demo()` の 3 つを走らせるが、`CLAUDE.md` には hook・dict しか書いていない
 - 定義ファイルの文だけを直す項目で、確かめることは `cli.py` と合っているかだけなので、確認は main が行う
+
+---
+
+## TODO-058. 要約・翻訳の claude -p の effort を下げると速くなるか測る
+
+|      | main | 担当 |
+|------|------|------|
+| 見込み | Opus 5.5 / effort 既定 | 測定: verifier（Sonnet 5.5 / medium）。変えるなら main（実装）+ reviewer（Opus 5.5 / high）+ verifier（Sonnet 5.5 / medium） |
+
+- [ ] verifier が、`rewrite()` と同じ引数の `claude -p` で、`--effort` 無し（既定の `high`）・`--effort medium`・`--effort low` の 3 つを比べる。
+  要約 3 件（短い・中くらい・長い返答）と翻訳 1〜2 件を、それぞれの設定で 1 回ずつ。見るのは `time` の実時間と出力の中身
+  （頼みごと・決めることが抜けていないか、`KANA_NOTE` のひらがな化が守られているか、訳の抜け）。
+  あわせて、`--effort` を付けない `claude -p` の起動だけにかかる時間の目安も 1 回測る（effort で縮まない分を見るため）
+- [ ] 結果を見て、変えるかどうかを利用者と決める
+- [ ] 変えるなら: `rewrite()` の `claude -p` に `--effort <決めた値>` を足す。`demo()` の偽の `claude`（`hook.py` の `"$1 $3"` と `"$9"`）は
+  引数の位置で確かめているので合わせて直す。`docs/Developer.md`（3.2 の `rewrite()` の手順 1）と `docs/UsersGuide.md`（要約・翻訳の
+  遅れの秒数とトークン量）も直す
+
+背景（2026-09-30。`/claude-api prompt-audit` の flag から）:
+
+- `hook.py:310` の `claude -p --model sonnet` は `--effort` を付けていないので、Sonnet 5.5 の既定の `high` で動く。
+  `claude --help` に `--effort <level>`（low〜max）がある
+- 要約と翻訳の両方を対象にする（同じ `rewrite()` から呼ぶので、引数 1 か所で両方に効く。利用者と決めた）
+- `hook.py:80` の「要約は Sonnet で 5〜6 秒だった」と `docs/UsersGuide.md` の秒数・トークン量は、どのモデルで測ったか書いていない。
+  測定の既定の側の値で、今の値として確かめる
+- 測る材料は、`~/.claude/projects/` の会話ログから利用者の返答を取る。本物の `$XDG_RUNTIME_DIR`・`$XDG_STATE_HOME` は使わない
+  （`CLAUDE.md` の「注意」）。本物の `claude -p` を 15 回ほど呼ぶので料金が少しかかる
+- 決めること: effort を下げるか、下げるなら `medium` か `low` か。測定の結果が出た後に聞く。速さの差が小さい、または品質が落ちるなら変えない
 
 ---
 
