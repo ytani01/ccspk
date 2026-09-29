@@ -114,6 +114,8 @@ def to_speech(text):
 
 def tidy(text):
     """読み上げ用に整える（clip() の前まで）。"""
+    # NUL は子プロセスの argv に渡せず、WRAP とも見分けられないので最初に消す
+    text = text.replace("\0", "")
     # コードブロックと表は中身を読まない。閉じていないブロックは末尾まで
     text = re.sub(r"^\s*(```|~~~).*?(?:^\s*\1|\Z)", "コード省略。", text, flags=re.S | re.M)
     text = re.sub(r"^\s*\|.*$", "", text, flags=re.M)
@@ -460,6 +462,7 @@ def demo():
     assert to_speech(a * (LIMIT + 5) + "。いう") == a * (LIMIT + 5) + "。"
     assert to_speech("```\nonly code\n```") == "コード省略。"
     assert to_speech("") == ""
+    assert to_speech("a\0b\n\0c") == "ab。 c"  # NUL は消す。行頭の NUL を WRAP と見てつながない
     assert to_speech("CCSPK_SPEAK を足す") == "CCSPK SPEAK を足す"
     assert to_speech("説明\n```python\nsecret()\n") == "説明。 コード省略。"
     assert to_speech("前\n~~~\ncode\n~~~\n後") == "前。 コード省略。 後"
