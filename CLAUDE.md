@@ -10,7 +10,7 @@ Claude Code の返答の冒頭を、手元の VOICEVOX で読み上げるフッ�
 
 ```sh
 uv sync                   # .venv に入れる
-uv run ccspk test         # hook・dict の自己テスト（demo() の assert）
+uv run ccspk test         # hook・dict・check の自己テスト（demo() の assert）
 .venv/bin/ccspk say '文'  # 合成と再生だけを試す
 uv tool install .         # 利用者の環境へ入れる
 ```
