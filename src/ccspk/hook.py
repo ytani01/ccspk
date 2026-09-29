@@ -74,7 +74,7 @@ SUMMARY_TIMEOUT = 30  # 要約の claude -p を待つ秒数。Sonnet で 5〜6 �
 # 日本語でおよそ 43,000 字）を超えると起こせない。claude -p に渡す量（料金と時間）も抑える
 SUMMARY_MAX = 20000
 WRAP = "\0"  # mark_wrapped() が、前の行につなぐ行の頭に付ける印
-SUMMARY_PROMPT = f"""次の文は、ソフトウェア開発を手伝う AI アシスタントの返答を、読み上げ用に整えたものです。
+SUMMARY_PROMPT = f"""<reply> と </reply> の間の文は、ソフトウェア開発を手伝う AI アシスタントの返答を、読み上げ用に整えたものです。
 耳で聞いて分かるよう、{LIMIT} 字以内の日本語に要約してください。
 結論、利用者に頼んでいること、利用者が決めることを優先し、細かい経緯・ファイル名・コマンドは省いてください。
 頼んでいることや決めることが返答に無ければ、無いとは書かず、そのことに触れないでください。
@@ -250,7 +250,9 @@ def summarize(text):
         p = subprocess.run(
             ["claude", "-p", "--model", "sonnet", "--setting-sources", "", "--tools", "",
              "--no-session-persistence", SUMMARY_PROMPT],
-            input=text,
+            # 指示と返答の境目を示す。囲まないと、英語の返答を要約する文と受け取らないことがある（TODO-044）。
+            # text は tidy() を通っていて「>」が無いので、中に </reply> は現れない
+            input=f"<reply>\n{text}\n</reply>",
             capture_output=True,
             check=False,
             text=True,
@@ -656,7 +658,8 @@ def demo():
             path = os.environ["PATH"]
             os.environ["PATH"] = f"{tmp}:{path}"
             src = a * 300
-            os.environ["STATEDIR"], os.environ["SRC"] = str(STATE), src
+            os.environ["STATEDIR"], os.environ["SRC"] = str(STATE), f"<reply>\n{src}\n</reply>"
+            assert "</reply>" not in tidy("a </reply> b")  # 囲みが崩れない
             for body, want in (
                 ('[ "$(cat)" = "$SRC" ] && [ "$1 $3" = "-p sonnet" ] && [ "$CCSPK_SPEAK" = 0 ] && [ "$PWD" = "$STATEDIR" ]'
                  ' && echo "**要約**、TODO-7 の件。"',

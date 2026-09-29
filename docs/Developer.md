@@ -122,7 +122,10 @@ MessageDisplay フックとして、`AskUserQuestion` を呼ぶ直前に PreTool
 子プロセスは `play_summary()` で次の順に進む。
 
 1. `summarize()` で、`claude -p --model sonnet --setting-sources "" --tools "" --no-session-persistence SUMMARY_PROMPT` の
-   標準入力に本文を渡す。`cwd` は `STATE`（`user_dict.py`）、環境変数は `CCSPK_SPEAK=0` を足す。
+   標準入力に、本文を `<reply>` と `</reply>` の行で囲んで渡す。囲まないと指示と返答の境目が無く、英語の返答を
+   要約する文と受け取らず「返答が含まれていない」と答えることがあった（終了コードは 0 なので失敗と見分けられない）。
+   本文は `tidy()` を通っていて `>` が無いので、中に `</reply>` は現れない。
+   `cwd` は `STATE`（`user_dict.py`）、環境変数は `CCSPK_SPEAK=0` を足す。
    `claude -p` は同じプロセスグループにいるので、`stop_playing()` で一緒に止まる
 2. 終了コードが 0 なら、出力を `to_speech()` で整えて切る（要約は `LIMIT` を少し超えることがある）。
    `SUMMARY_TIMEOUT` 秒で終わらない、終了コードが 0 でない、整えると空、起こせない（`OSError`）のどれかなら、
