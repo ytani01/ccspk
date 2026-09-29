@@ -1,7 +1,7 @@
 # TODO
 
-**残っている項目: TODO-048。** これまでに 55 件を決着させた。
-新しく足すときは「完了済み」の上に節を作る。**番号は `TODO-057` から。**
+**残っている項目: TODO-048、TODO-057。** これまでに 55 件を決着させた。
+新しく足すときは「完了済み」の上に節を作る。**番号は `TODO-058` から。**
 
 ---
 
@@ -30,6 +30,21 @@
 - 公開側の版とタグは、写したときのタグに揃える（`hatch-vcs` が版を決めるため、公開側にもタグが要る）
 - verifier には、スクリプトで一時ディレクトリの公開用リポジトリへ写させ、除いたファイルが無いこと、写した中身から
   `uv tool install` と `ccspk test` が通ること、版がタグと合うことを確かめさせる
+
+---
+
+## TODO-057. CLAUDE.md の ccspk test の説明に check を足す
+
+|      | main | 担当 |
+|------|------|------|
+| 見込み | Opus 5.5 / effort 既定 | main のみ |
+
+- [ ] `CLAUDE.md` の「コマンド」の `uv run ccspk test` のコメントを「hook・dict・check の自己テスト（demo() の assert）」にする
+
+背景（2026-09-30。`/claude-api prompt-audit` で見つかった）:
+
+- `src/ccspk/cli.py` の `test` は `hook_demo()`・`dict_demo()`・`check_demo()` の 3 つを走らせるが、`CLAUDE.md` には hook・dict しか書いていない
+- 定義ファイルの文だけを直す項目で、確かめることは `cli.py` と合っているかだけなので、確認は main が行う
 
 ---
 
