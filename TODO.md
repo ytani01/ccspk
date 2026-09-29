@@ -42,10 +42,12 @@
 - [ ] `docs/UsersGuide.md` の「1.3 読み上げを無効にする」に、`claude -p` で子プロセスを起こす人向けの注意を足す:
   環境変数 `CCSPK_SPEAK=0` を渡しても止まらない。`settings.json` の `env` が上書きするため、子プロセスの中では `1` のまま。
   `--settings '{"env":{"CCSPK_SPEAK":"0"}}'` で渡すと止まる
-- [ ] `docs/Developer.md` の「3.2 子プロセス」に、同じ事情と、`ccspk` 自身は `--setting-sources ""` で
-  `settings.json` を読ませない（`hook.py`・`check.py` の `claude -p`）ので環境変数で足りる、という違いを書く
+- [ ] `docs/Developer.md` の「3.2 子プロセス」に、同じ事情と、`ccspk` 自身の `claude -p`（`hook.py`・`check.py`）は
+  `--setting-sources ""` で `settings.json` を読ませないのでフックが登録されず、`ccspk hook` がそもそも走らない、
+  という違いを書く。そこで渡している `CCSPK_SPEAK=0` は念のためで、止めているのは `--setting-sources ""` のほう
 - [ ] verifier は、`claude -p` の子プロセスで `printenv CCSPK_SPEAK` を実行し、書いた 2 つの方法の結果
-  （環境変数だけ → `1`、`--settings` → `0`）を、書いたとおりに再現して確かめる（各 1 回で足りる）
+  （環境変数だけ → `1`、`--settings` → `0`）を、書いたとおりに再現して確かめる（各 1 回で足りる）。
+  あわせて、`--setting-sources ""` を付けた `claude -p --debug` の出力にフックの実行が出ないことを確かめる（1 回）
 
 背景（2026-09-30。`~/.claude` の TODO-017 で、担当の返事を測る `claude -p` を起こしたときに気づいた）:
 
