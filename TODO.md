@@ -1,7 +1,7 @@
 # TODO
 
-**残っている項目: TODO-035、TODO-039。** これまでに 38 件を決着させた。
-新しく足すときは「完了済み」の上に節を作る。**番号は `TODO-041` から。**
+**残っている項目: TODO-035、TODO-039、TODO-041。** これまでに 38 件を決着させた。
+新しく足すときは「完了済み」の上に節を作る。**番号は `TODO-042` から。**
 
 ---
 
@@ -50,6 +50,30 @@
   ほぼ同じなので採らない
 - 環境変数での上書きは付けない。`ccspk summary`（TODO-037）と違い、一時的に切り替えるものではないため
 - `ccspk summary` と同じ形にするので、TODO-037 が済んでから着手する
+
+---
+
+## TODO-041. 文書の説明に mermaid の図を入れる
+
+|      | main | 担当 |
+|------|------|------|
+| 見込み | Opus 5.5 / effort medium | main（書き足し）+ reviewer（Opus 5.5 / high）+ verifier（Sonnet 5.5 / medium） |
+
+- [ ] `docs/Developer.md` の「3.1 流れ」に、`main()` の 10 段の進み方と、途中で終わる分岐を `flowchart` で入れる
+- [ ] `docs/Developer.md` の「3.2 子プロセス」に、フック → 子プロセス → `claude -p`（要約）→ エンジン → `pw-play` の
+  やり取りを `sequenceDiagram` で入れる
+- [ ] `docs/Developer.md` の「3.8 自動の点検」に、Stop → `after_stop()` → 点検の起動 → 読みの取得 → `claude -p` →
+  辞書に登録、の流れを図で入れる
+- [ ] `docs/UsersGuide.md` の冒頭に、Claude Code・`ccspk`・VOICEVOX エンジン・PipeWire のつながりを 1 枚の構成図で入れる
+
+背景（2026-09-29 に利用者と決めた）:
+
+- 文書の説明に mermaid の図を入れる規則を `~/.claude/CLAUDE.md` の「日本語の書き方」に足した。この項目はその規則を
+  今ある文書に当てはめるもの
+- 図は文章の補いで、文章は消さない。図が文章・コードと食い違わないことを reviewer に見させる
+  （書き写しでなくコードとの突き合わせ）
+- verifier には、各図が mermaid として描けるか（`npx -p @mermaid-js/mermaid-cli mmdc` で SVG にして、エラーが出ないか・
+  描けた図に抜けや余計な箱が無いか）を確かめさせる。図の良し悪しは評価させない
 
 ---
 
