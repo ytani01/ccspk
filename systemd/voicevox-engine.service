@@ -1,0 +1,18 @@
+[Unit]
+Description=VOICEVOX engine（Claude の返答の読み上げ用）
+
+[Service]
+# 公式リリースの Linux 単体版（voicevox_engine-linux-cpu-x64-*.vvpp）を展開した場所
+WorkingDirectory=%h/.local/share/voicevox-engine/0.25.2
+ExecStart=%h/.local/share/voicevox-engine/0.25.2/run --host 127.0.0.1 --port 50021
+# 起動したら ~/.config/ccspk/user_dict.json を辞書に読み込む（ccspk の user_dict.py）。
+# 応答は最長 10 秒待つ。起動の上限（TimeoutStartSec。user unit の既定は 15 秒のことがある）を超えると、
+# 先頭の - があってもエンジンごと止められるため。- は、読み込みの失敗でエンジンを止めないためのもの
+ExecStartPost=-/bin/sh -c 'f="$${XDG_CONFIG_HOME:-$$HOME/.config}/ccspk/user_dict.json"; [ -f "$$f" ] || exit 0; \
+  timeout 10 sh -c "until curl -sf -o /dev/null --max-time 1 http://127.0.0.1:50021/version; do sleep 1; done" \
+    && exec %h/.local/bin/ccspk dict import "$$f"; \
+  echo "エンジンが 10 秒で応答しないので辞書を読み込まなかった" >&2; exit 1'
+Restart=on-failure
+
+[Install]
+WantedBy=default.target
