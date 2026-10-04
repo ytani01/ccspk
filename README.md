@@ -3,7 +3,7 @@
 Claude Code の返答を、手元の VOICEVOX（既定は夜語トバリ・明るい）で読み上げるフック。
 長い返答は要約し、英文の返答は日本語に訳して読む。
 
-https://github.com/user-attachments/assets/78a4d7cf-f9b8-4bff-bdf5-e12a925c588b
+https://github.com/user-attachments/assets/03d95171-ae33-4724-9b1e-4e4c5fc117db
 
 返答の読み上げ・長文の要約・英文の翻訳のデモ（音が出ます。待ち時間は詰めてあります）。音声: VOICEVOX:夜語トバリ
 
