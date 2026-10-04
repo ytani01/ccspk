@@ -272,8 +272,9 @@ def demo():
         shutil.rmtree(SPEAKER_FILE.parent)
         SPEAKER_FILE = saved
     # 音量のファイル。無い・範囲の外・数でないときは 1.0
-    global VOLUME_FILE
+    global VOLUME_FILE, REMOTE_FILE
     saved, VOLUME_FILE = VOLUME_FILE, Path(tempfile.mkdtemp()) / "volume"
+    saved_remote, REMOTE_FILE = REMOTE_FILE, VOLUME_FILE.parent / "remote"  # 本物の remote を読むと ssh の引数になる
     try:
         assert volume() == 1.0 and pw_play() == ["pw-play", "--volume=1.0", "-"]
         write_config(VOLUME_FILE, 0.6)
@@ -285,9 +286,8 @@ def demo():
         assert volume() == 0.0
     finally:
         shutil.rmtree(VOLUME_FILE.parent)
-        VOLUME_FILE = saved
+        VOLUME_FILE, REMOTE_FILE = saved, saved_remote
     # ssh 先で鳴らす。ホストが無い・空なら手元
-    global REMOTE_FILE
     saved, REMOTE_FILE = REMOTE_FILE, Path(tempfile.mkdtemp()) / "remote"
     try:
         assert remote() is None and pw_play()[0] == "pw-play"
