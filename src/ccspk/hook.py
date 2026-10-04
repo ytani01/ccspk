@@ -11,6 +11,7 @@ pw-play が無い、エンジンに接続できない、PipeWire が動いてい
 """
 
 import fcntl
+import io
 import json
 import os
 import queue
@@ -250,7 +251,30 @@ def questions(payload):
     items = tool_input.get("questions") if isinstance(tool_input, dict) else None
     if not isinstance(items, list):
         return ""
-    return "\n".join(q["question"] for q in items if isinstance(q, dict) and isinstance(q.get("question"), str))
+    return "\n".join(q["question"] for q in items if isinstance(q, dict) and utf8(q.get("question")))
+
+
+def utf8(value):
+    """value が文字列で、UTF-8 へ戻せるか。JSON のエスケープ（"\\udcff"）の単独のサロゲートは
+    json.loads が通すが、あとの write_text などで落ちる。読み上げに使う値だけをこれで確かめる。"""
+    if not isinstance(value, str):
+        return False
+    try:
+        value.encode("utf-8")
+    except UnicodeEncodeError:
+        return False
+    return True
+
+
+def read_payload(stream):
+    """フックの入力をバイト列から UTF-8 として読む。読めないか、JSON のオブジェクトでないときは None。
+    自分で decode するのは、C ロケールの sys.stdin も json.load(バイト列) も不正な UTF-8
+    （サロゲート）を通すため。単独のサロゲートのエスケープは通す（使う値だけを utf8() で確かめる）。"""
+    try:
+        payload = json.loads(stream.read().decode("utf-8"))
+    except (ValueError, OSError):  # JSONDecodeError・UnicodeDecodeError は ValueError
+        return None
+    return payload if isinstance(payload, dict) else None
 
 
 def clip(text):
@@ -289,6 +313,7 @@ def prepare(raw):
     整えてから渡すと、コードブロックが「コード省略」になるなど、返答の形が崩れる。
     翻訳ではコードブロックの中身を空にしてから切る。長いコードで、後ろの説明が TRANSLATE_MAX 字からはみ出さないように。
     長い英文は要約で日本語にするので、訳してから要約する 2 回にはしない。"""
+    raw = raw if utf8(raw) else ""  # フックの入力の値が無いか、文字列でないか、単独のサロゲートがある
     text = tidy(raw)
     raw = raw.replace("\0", "")  # NUL は子プロセスの argv に渡せない
     if len(text) > LIMIT and summary_on():
@@ -407,7 +432,9 @@ def assemble(payload):
     LOCK を取ってから呼ぶ。そろわないまま PARTS_KEEP 秒たった分は消す。
     """
     mid, index, delta = payload.get("message_id"), payload.get("index"), payload.get("delta") or ""
-    if not mid or not isinstance(index, int):
+    if not (utf8(mid) and mid) or "/" in mid or "\0" in mid:  # ファイル名に使う
+        return None
+    if not isinstance(index, int) or isinstance(index, bool) or index < 0 or not utf8(delta):
         return None
     PARTS.mkdir(exist_ok=True)
     for q in PARTS.iterdir():
@@ -419,9 +446,11 @@ def assemble(payload):
         final.write_text(str(index))
     try:
         last = int(final.read_text())
-        parts = [Path(PARTS, f"{mid}.{i}") for i in range(last + 1)]
     except (OSError, ValueError):
         return None
+    if last + 1 > sum(q.name.startswith(f"{mid}.") for q in PARTS.iterdir()):  # 置いた数より多くは要らない
+        return None
+    parts = [Path(PARTS, f"{mid}.{i}") for i in range(last + 1)]
     if not all(q.exists() for q in parts):
         return None
     text = "".join(q.read_text() for q in parts)
@@ -597,6 +626,17 @@ def demo():
     assert to_speech("CCSPK_SPEAK を足す") == "CCSPK SPEAK を足す"
     assert to_speech("説明\n```python\nsecret()\n") == "説明。 コード省略。"
     assert to_speech("前\n~~~\ncode\n~~~\n後") == "前。 コード省略。 後"
+    # フックの入力が読めないときは None（main は早く返る）
+    assert read_payload(io.BytesIO(b'{"a": "\xff"}')) is None  # UTF-8 として不正
+    assert read_payload(io.BytesIO(b'{"a": "\xed\xb3\xbf"}')) is None  # サロゲート
+    # JSON のエスケープの単独のサロゲートは通す。使う値にあれば、prepare は空の返答とみなし、assemble はその分を置かない
+    assert read_payload(io.BytesIO(rb'{"cwd": "\udcff", "last_assistant_message": "\u3042"}'))[
+        "last_assistant_message"] == "あ"
+    assert prepare("\udcff") == prepare("\ud83d") == ("", None, "")
+    assert read_payload(io.BytesIO(rb'{"a": "\ud83d\ude00"}')) == {"a": "😀"}  # 対になったものは通す
+    assert read_payload(io.BytesIO(b"[1]")) is None
+    assert read_payload(io.BytesIO(b"{")) is None
+    assert read_payload(io.BytesIO('{"a": "あ"}'.encode())) == {"a": "あ"}
     # 記号の置き換えと、数字の直後のスペース
     assert to_speech("1〜4 秒、12～14 行目") == "1から4秒、12から14行目"
     assert to_speech("2 行 → 1 行、1 〜 4") == "2行、1行、1から4"
@@ -735,6 +775,8 @@ def demo():
     assert questions({"tool_name": "AskUserQuestion"}) == ""
     assert questions({"tool_name": "AskUserQuestion", "tool_input": "壊れた入力"}) == ""
     assert questions({"tool_name": "AskUserQuestion", "tool_input": {"questions": [{"question": 1}]}}) == ""
+    assert questions({"tool_name": "AskUserQuestion", "tool_input": {"questions": [
+        {"question": "単独の\udcff"}, {"question": "読む？"}]}}) == "読む？"  # 正しい質問だけ読む
 
     # MessageDisplay の分をつなぐ。後ろの分が先に来ても、そろうまでは None
     global PARTS
@@ -749,7 +791,19 @@ def demo():
         assert part("b", 0, "1 つだけ。", final=True) == "1 つだけ。"
         assert part("c", 0, "途中。") is None
         assert part("d", 2, "抜けがある。", final=True) is None  # 1 が来ていない
+        start = time.monotonic()
+        assert part("g", 10**7, "大きすぎる。", final=True) is None
+        assert time.monotonic() - start < 1  # 番号の数だけリストを作らない
+        assert part("h", -1, "負の番号。", final=True) is None
+        assert part("i", True, "bool の番号。", final=True) is None
+        assert not any(q.name.startswith("i.") for q in PARTS.iterdir())  # 分を置かない
         assert assemble({"index": 0, "delta": "ID が無い。", "final": True}) is None
+        assert part(1, 0, "ID が文字列でない。", final=True) is None
+        assert part("../x", 0, "PARTS の外。", final=True) is None
+        assert part("x\0", 0, "NUL を含む。", final=True) is None
+        assert part("y", 0, "単独の\ud83d", final=True) is None  # 書き出せない分は置かない
+        assert part("\udcff", 0, "ID に単独のサロゲート。", final=True) is None
+        assert part("f", 0, ["文字列でない"], final=True) is None
         old = Path(PARTS, "c.0")
         os.utime(old, (0, 0))
         part("e", 0, "次の文。")
@@ -788,6 +842,7 @@ def demo():
             assert prepare("**" + a * LIMIT + "**") == (a * LIMIT, None, a * LIMIT)  # 整えた後の字数で比べる
             assert prepare(long) == (a * (LIMIT + 1), SUMMARIZE, long)
             assert prepare("\0" + long)[2] == long  # NUL は消す
+            assert prepare(None) == prepare(1) == prepare(["a"]) == ("", None, "")  # 文字列でなければ空の返答
             assert prepare(a * (SUMMARY_MAX + 10)) == (a * SUMMARY_MAX, SUMMARIZE, a * SUMMARY_MAX)  # SUMMARY_MAX 字まで
             assert prepare("") == ("", None, "")
             # 英文の見分け。整える前の返答で、コードブロックを除いて、かな・漢字が 1 字でもあれば日本語
@@ -982,9 +1037,7 @@ def main():
         except OSError:
             pass
         return
-    try:
-        payload = json.load(sys.stdin)
-    except (json.JSONDecodeError, OSError):
+    if (payload := read_payload(sys.stdin.buffer)) is None:
         return
     event = payload.get("hook_event_name")
     display = event == "MessageDisplay"
@@ -1008,7 +1061,7 @@ def main():
         elif ask:
             raw = questions(payload)
         else:
-            raw = payload.get("last_assistant_message") or ""
+            raw = payload.get("last_assistant_message")
         text, flag, body = prepare(raw)
         if (display or ask) and not text:
             return  # 表だけの途中の文章などで、読んでいる返答を止めない

@@ -12,7 +12,7 @@
 
 `add` はアクセントの位置を、読みを /audio_query に渡してエンジンに任せる。
 同じ表記が登録済みなら、読みを書き換える。登録後の読みを表示し、--speak で鳴らす。
-`add`・`remove`・`import` が成功したら、エンジンの辞書を DICT_FILE
+`add`・`remove`・`import`・`auto --remove` が成功したら、エンジンの辞書を DICT_FILE
 （~/.config/ccspk/user_dict.json）へ書き出す。エンジンの起動時に systemd がこれを `import` する
 （systemd/voicevox-engine.service の ExecStartPost）。
 `speaker` は読み上げの話者を SPEAKER_FILE に残す。フック・say・dict add --speak・読み間違いの点検が使う。

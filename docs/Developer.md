@@ -87,7 +87,7 @@ MessageDisplay フックとして、`AskUserQuestion` を呼ぶ直前に PreTool
 先に届くこともある。PreToolUse なら `tool_name` と `tool_input.questions[].question`。
 `agent_id` があるとき（サブエージェント）は読まない。
 
-`hook.py` にはサブコマンドが 6 つある。
+`hook.py` にはサブコマンドが 7 つある。
 
 | サブコマンド | 動き |
 |---|---|
@@ -314,8 +314,8 @@ PID で待たずに pidfd で待つのは、前の子プロセスが終わって
 | `ENDS` | `。！？!?` | 文末 |
 | `COMMAS` | `、，` | 読点。半角の `,` は `1,000` のように数字の中にも出るので入れない |
 | `ENGINE` | `http://127.0.0.1:50021` | エンジンの URL |
-| `PLAY` | `--play` | 子プロセスの目印。`stop_playing()` は `MODULE` と合わせて見分ける |
-| `MODULE` | `ccspk.hook` | 子プロセスが `python -m` で起こすモジュール。`stop_playing()` の目印にもなる |
+| `PLAY` | `--play` | 子プロセスの目印。`ours()` は `MODULE` と合わせて見分ける（`playing()`・`speak()` が使う） |
+| `MODULE` | `ccspk.hook` | 子プロセスが `python -m` で起こすモジュール。`ours()` の目印にもなる |
 | `FENCE` | 正規表現 | コードブロック（閉じていなければ末尾まで）。`tidy()` と `english()` で使う |
 | `CUT` | 正規表現 | 1・2 文目を切る区切り |
 | `CUT_MIN` | 8 | これより手前では切らない |
@@ -360,7 +360,8 @@ sudachipy は読まない（最初の音を遅らせない）。
   （`SPOKEN` があり、`CHECKED` が無いか `SPOKEN` より古いとき）、`python -P -m ccspk.check` を
   `start_new_session=True`・入出力は捨てる・`cwd` は `STATE` で起こす
 
-`CCSPK_SPEAK` が `1` でない、`UNUSABLE` がある、`unusable()` がだめ、で早く返るときは、どちらも呼ばない。
+`CCSPK_SPEAK` が `1` でない、`UNUSABLE` がある、`unusable()` がだめ、標準入力の JSON が読めないかオブジェクトでない、
+`MessageDisplay`・`PreToolUse` に `agent_id` がある（サブエージェント）、で早く返るときは、どちらも呼ばない。
 状態のファイルの読み書きの `OSError` は捨て、フックを落とさない。
 
 点検（`main()` → `check()`）の流れ:
