@@ -17,6 +17,16 @@ flowchart LR
     UD[("~/.config/ccspk/user_dict.json")] -- "起動のたびに読み込む" --> VV
 ```
 
+## 前提の環境
+
+次の環境で作り、動かしている。
+
+- OS: [CachyOS](https://cachyos.org/)（Arch Linux 系）
+- [uv](https://docs.astral.sh/uv/): `ccspk` のインストールに使う
+- [Claude Code](https://code.claude.com/docs/en/overview): フックから `ccspk` を起こす
+- PipeWire: 再生に `pw-play` を使う
+- systemd の user unit: VOICEVOX エンジンを常駐させる
+
 ## 1. インストール
 
 リポジトリは `~/work/ccspk` に clone する（下の手順のコマンドは、
