@@ -8,6 +8,8 @@ claude -p で要約してから読む。翻訳が入っていて（ccspk transla
 再生中に次の返答が来たら、前の再生を止めてから読む。順番に読むモード（ccspk queue）なら、止めずに来た順に読む。
 pw-play が無い、エンジンに接続できない、PipeWire が動いていない、のどれかなら
 鳴らさずに終わり、理由を UNUSABLE に書いて覚える。ファイルがあるあいだは確かめもせずに終わる。
+ccspk remote で ssh 先を決めていれば、ssh 先の pw-play で鳴らす。エンジンにつながらなければ
+ssh のマスター接続を張って試し直し、それでもだめなら鳴らさずに終わる（UNUSABLE には覚えない）。
 """
 
 import fcntl
@@ -33,7 +35,15 @@ import click
 
 from . import check
 from .mylog import getLogger
-from .user_dict import DICT_FILE, STATE, pw_play, speaker
+from .user_dict import (
+    DICT_FILE,
+    REMOTE_FILE,
+    STATE,
+    pw_play,
+    remote,
+    speaker,
+    write_config,
+)
 
 LIMIT = 180  # 読み上げるのはおよそここまで。超えるときは次の文末（無ければ読点）まで
 # 延ばすのはここまで。句点の無い英語の返答 2,339 字を 1 回で合成しようとして、
@@ -59,6 +69,9 @@ PIDFILE = BASE.with_suffix(".pid")  # 子プロセスの PID を 1 行に 1 つ�
 UNUSABLE = BASE.with_suffix(".unusable")
 # 最後に読んだ文。返答の最後の文章は MessageDisplay と Stop の両方から来るので、2 度読まない
 LAST = BASE.with_suffix(".last")
+# ssh 先へマスター接続を張れなかった時刻（mtime）。RETRY_AFTER 秒のうちは張り直さない（フックを待たせないため）
+DOWN = BASE.with_suffix(".down")
+RETRY_AFTER = 60
 LOCK = BASE.with_suffix(".lock")  # フックは並んで走るので、PARTS・LAST・PIDFILE を触るあいだは 1 つずつ通す（ccspk stop も取る）
 # MessageDisplay は 1 つの文章を index ごとに分けて渡し、最後の分に final が付く。
 # フックは並んで走り、後ろの分が先に届くこともあるので、分けてここに置き、そろったらつなぐ
@@ -110,17 +123,27 @@ NAMES = {SUMMARIZE: "要約", TRANSLATING: "翻訳"}  # 失敗したら「要約
 _log = getLogger("hook")
 
 
-def unusable():
-    """鳴らせない理由を返す。鳴らせるなら None。"""
-    if not shutil.which("pw-play"):
-        return "pw-play が無い"
-    # エンジンは接続できるかだけ見る（1 ms かからない）
+def engine_error():
+    """エンジンに接続できない理由。できれば None。接続できるかだけ見る（1 ms かからない）。"""
     url = urllib.parse.urlsplit(ENGINE)
     host, port = url.hostname, url.port
     try:
         socket.create_connection((host, port), timeout=1).close()
     except OSError as e:
         return f"エンジン（{host}:{port}）に接続できない: {e}"
+    return None
+
+
+def unusable():
+    """鳴らせない理由を返す。鳴らせるなら None。
+    remote() があれば、ssh があるかだけ見る（エンジンは reachable()、PipeWire は ssh 先の話なので見ない）。"""
+    player = "ssh" if remote() else "pw-play"
+    if not shutil.which(player):
+        return f"{player} が無い"
+    if remote():
+        return None
+    if e := engine_error():
+        return e
     # PIPEWIRE_REMOTE は [a,b] のような形も取り、解釈を合わせきれないので、あれば確かめない
     if os.environ.get("PIPEWIRE_REMOTE"):
         return None
@@ -132,6 +155,34 @@ def unusable():
     except OSError as e:
         return f"PipeWire（{sock}）に接続できない: {e}"
     return None
+
+
+def reachable():
+    """ssh 先のエンジンにつながるか。つながらなければ、LocalForward を張るマスター接続を張って試し直す。
+    張れなかったら DOWN に覚え、RETRY_AFTER 秒のうちは張り直さずに False を返す。"""
+    if engine_error() is None:
+        return True
+    try:
+        if time.time() - DOWN.stat().st_mtime < RETRY_AFTER:
+            return False
+    except OSError:
+        pass
+    try:
+        subprocess.run(
+            ["ssh", "-fN", "-o", "BatchMode=yes", "-o", "ConnectTimeout=3", remote()],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=5,
+        )
+    except (OSError, subprocess.SubprocessError):
+        pass
+    ok = engine_error() is None
+    try:
+        DOWN.unlink(missing_ok=True) if ok else DOWN.touch()
+    except OSError:
+        pass
+    return ok
 
 
 def to_speech(text):
@@ -1037,6 +1088,8 @@ def main():
         except OSError:
             pass
         return
+    if remote() and not reachable():  # ssh 先が落ちているだけかもしれないので、覚えない
+        return
     if (payload := read_payload(sys.stdin.buffer)) is None:
         return
     event = payload.get("hook_event_name")
@@ -1146,6 +1199,27 @@ def translate(state):
     """英文の返答を日本語に訳してから読むかを切り替える（on・off）。引数なしは今の状態を表示する。次の返答から効く。"""
     switch(TRANSLATE, state)
     print("on" if TRANSLATE.exists() else "off")
+
+
+@click.command()
+@click.argument("host", required=False)
+@click.option("--off", is_flag=True, help="手元の pw-play で鳴らす")
+def remote_(host, off):
+    """読み上げを ssh 先の HOST の pw-play で鳴らす（例: ytlenovo）。引数なしは今の ssh 先を表示する。次の読み上げから効く。
+
+    エンジンへは ~/.ssh/config の LocalForward でつなぎ、辞書は HOST の ~/.config/ccspk/user_dict.json へ書き出す。
+    """
+    if host and off:
+        raise click.UsageError("HOST と --off は一緒に使えない")
+    if host is not None:
+        if not host or host.startswith("-") or any(c.isspace() for c in host):
+            raise click.BadParameter("ssh のホスト名を 1 つ渡す", param_hint="HOST")
+        write_config(REMOTE_FILE, host)
+    if off:
+        REMOTE_FILE.unlink(missing_ok=True)
+    if host or off:
+        UNUSABLE.unlink(missing_ok=True)  # 鳴らす先が変わったので、前に覚えた理由は当たらない
+    print(remote() or "off")
 
 
 def switch(path, state):

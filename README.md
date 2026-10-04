@@ -36,6 +36,7 @@ https://github.com/user-attachments/assets/03d95171-ae33-4724-9b1e-4e4c5fc117db
 - `ccspk translate` で、英文の返答を日本語に訳して読むかを切り替えます
 - `ccspk speaker` で、読み上げの話者を変えます
 - `ccspk volume` で、読み上げの音量を変えます
+- `ccspk remote` で、ssh でつながる別のマシンの VOICEVOX で読み上げます
 
 ## 3. 注意事項
 

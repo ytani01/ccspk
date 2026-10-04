@@ -13,8 +13,8 @@
 |---|---|
 | `pyproject.toml` | コマンド `ccspk` の定義（`uv tool install` で入れる） |
 | `src/ccspk/cli.py` | サブコマンドをまとめる。`ccspk test` もここにある |
-| `src/ccspk/hook.py` | `ccspk hook`・`say`・`stop`・`status`・`summary`・`queue`・`translate`。Stop・MessageDisplay・PreToolUse フックとして、返答の冒頭と質問の文を VOICEVOX で読み上げる |
-| `src/ccspk/user_dict.py` | `ccspk dict`・`speaker`・`volume`。VOICEVOX のユーザー辞書を操作する。読み上げの話者（`speaker()`）と音量（`volume()`）もここで決める |
+| `src/ccspk/hook.py` | `ccspk hook`・`say`・`stop`・`status`・`summary`・`queue`・`translate`・`remote`。Stop・MessageDisplay・PreToolUse フックとして、返答の冒頭と質問の文を VOICEVOX で読み上げる |
+| `src/ccspk/user_dict.py` | `ccspk dict`・`speaker`・`volume`。VOICEVOX のユーザー辞書を操作する。読み上げの話者（`speaker()`）・音量（`volume()`）・ssh 先（`remote()`）もここで決める |
 | `src/ccspk/check.py` | 読み間違いの自動の点検（`python -m ccspk.check`）。フックが読み上げた文を記録し、Stop で裏で起こす（[「3.8 自動の点検」](#38-自動の点検)） |
 | `src/ccspk/__init__.py` | `__version__`（`--version` で出す版） |
 | `src/ccspk/click_utils.py` | `--debug`・`--version` などの共通オプション |
@@ -87,7 +87,7 @@ MessageDisplay フックとして、`AskUserQuestion` を呼ぶ直前に PreTool
 先に届くこともある。PreToolUse なら `tool_name` と `tool_input.questions[].question`。
 `agent_id` があるとき（サブエージェント）は読まない。
 
-`hook.py` にはサブコマンドが 7 つある。
+`hook.py` にはサブコマンドが 8 つある。
 
 | サブコマンド | 動き |
 |---|---|
@@ -98,13 +98,15 @@ MessageDisplay フックとして、`AskUserQuestion` を呼ぶ直前に PreTool
 | `summary [on\|off]` | `SUMMARY` を作る・消す。その後で `summary_on()` の結果を `on`・`off` で表示し、`CCSPK_SUMMARY` が決めていればそのことを添える |
 | `queue [on\|off]` | `QUEUE` を作る・消す（`switch()`。`summary` と共通）。その後で `QUEUE` があるかを `on`・`off` で表示する |
 | `translate [on\|off]` | `TRANSLATE` を作る・消す（`switch()`）。その後で `TRANSLATE` があるかを `on`・`off` で表示する |
+| `remote [HOST\|--off]` | `HOST` を `REMOTE_FILE` に書く（`write_config()`）か、`--off` で消す。どちらでも `UNUSABLE` を消す。その後で `remote()` を、無ければ `off` と表示する |
 
 `hook.py` の `main()`（`ccspk hook`）は、フックとして次の順に進む。
 どこかで条件を満たさなければ、そこで終わる。
 
 1. 環境変数 `CCSPK_SPEAK` が `1` か
 2. 使えないと覚えたファイル（`UNUSABLE`）が無いか。あれば確かめもせずに終わる
-3. `unusable()` で鳴らせるかを確かめる。だめなら理由を `UNUSABLE` に書いて終わる
+3. `unusable()` で鳴らせるかを確かめる。だめなら理由を `UNUSABLE` に書いて終わる。
+   `remote()` があれば、続けて `reachable()` でエンジンにつながるかを確かめ、だめなら `UNUSABLE` に書かずに終わる
 4. 標準入力の JSON を読む。MessageDisplay・PreToolUse で `agent_id` があれば終わる
 5. `LOCK` を取る。ここから先は、同時に来たフックを 1 つずつ通す
 6. MessageDisplay なら、`assemble()` で分を `PARTS` に置く。最後の分とそれより前の分が
@@ -134,7 +136,11 @@ flowchart TD
     B -- ある --> E
     B -- 無い --> C{"3. unusable() で鳴らせる"}
     C -- だめ --> CW["理由を UNUSABLE に書く"] --> E
-    C -- 鳴らせる --> D{"4. JSON を読む"}
+    C -- 鳴らせる --> R{"remote() がある"}
+    R -- 無い --> D
+    R -- ある --> RR{"reachable()"}
+    RR -- だめ --> E
+    RR -- つながる --> D{"4. JSON を読む"}
     D -- "読めない・MessageDisplay か PreToolUse で agent_id がある" --> E
     D -- 読めた --> L["5. LOCK を取る"]
     L --> F{"6. イベント"}
@@ -272,6 +278,44 @@ PID で待たずに pidfd で待つのは、前の子プロセスが終わって
 
 使えるときは、3 つ合わせて 1 ms ほどで終わる。
 
+`remote()`（`ccspk remote` で決めた ssh 先）があるときは、`ssh` が `PATH` にあるかだけを見る。エンジンは
+`main()` が `reachable()` で確かめる。接続できなければ `ssh -fN -o BatchMode=yes -o ConnectTimeout=3 <ホスト>` で
+（最長 5 秒待って）マスター接続を張り（`~/.ssh/config` の `LocalForward` が転送を張る。すでにマスター接続があれば、それが転送を張る）、
+もう一度だけ確かめる。ssh 先が一時的に落ちているだけのこともあるので、だめでも `UNUSABLE` には書かない。
+代わりに `DOWN`（`ccspk.down`）に触れ、その mtime から `RETRY_AFTER`（60）秒のうちは張り直さずに終わる。
+フックは Claude Code を待たせるので、落ちているあいだ毎回待たないため。つながったら `DOWN` を消す。
+PipeWire は ssh 先の話なので見ない。
+
+#### 3.4.1 ssh 先で鳴らす
+
+`pw_play()` は、`remote()` があれば `ssh -o BatchMode=yes <ホスト> sh -c '<watched() のスクリプト>'` を返す。
+ssh のクライアントを止めても（`SIGTERM` でも `SIGKILL` でも）、ssh 先の `pw-play` は鳴り続ける（2026-10-05 に実測）。
+`pw-play` は標準入力の wav を読み終えていて、接続が切れたことに気づかないため。そこで `watched()` は、`pw-play` の横で
+見張りを走らせる。見張りは 0.1 秒ごとに標準出力（ssh の接続）へ改行を書き、書けなくなったら `kill 0` で
+プロセスグループごと止める（sshd はコマンドを新しいセッションで走らせるので、グループは `pw-play` と見張りだけ）。
+`pw-play` が終われば見張りを止め、`pw-play` の終了コードで終わる。鳴り終わってから ssh が終わるまでの遅れは 0.1 秒ほど。
+
+```mermaid
+sequenceDiagram
+    participant C as 再生の子プロセス
+    participant S as ssh
+    participant P as ssh 先の pw-play
+    participant W as ssh 先の見張り
+    C->>S: wav（標準入力）
+    S->>P: wav
+    loop 0.1 秒ごと
+        W->>S: 改行（標準出力）
+    end
+    Note over C,S: stop_playing() がグループごと SIGTERM
+    W--xS: 書けない
+    W->>P: kill 0（グループごと）
+```
+
+`save()` も、`remote()` があれば、`dump()` の出力を `ssh <ホスト> sh -c 'mkdir -p … && cat > …/user_dict.tmp && mv …'` に
+渡し、ssh 先の `${XDG_CONFIG_HOME:-$HOME/.config}/ccspk/user_dict.json` を置き換える。手元の `DICT_FILE` には書かない。
+送っている途中で切れても `cat` は正常に終わるので、受けた大きさが送った大きさとそろったときだけ置き換える。
+裏の点検（`check.py`）からも呼ぶので、30 秒で諦める。
+
 ### 3.5 実行時のファイル
 
 どれも `$XDG_RUNTIME_DIR` に置く。`$XDG_RUNTIME_DIR` が無い環境では `/tmp` に、
@@ -283,6 +327,7 @@ PID で待たずに pidfd で待つのは、前の子プロセスが終わって
 | `UNUSABLE` | `ccspk.unusable`（`/tmp/ccspk-<uid>.unusable`） | 鳴らせない理由 |
 | `LAST` | `ccspk.last`（`/tmp/ccspk-<uid>.last`） | 最後に読んだ文（整えた後） |
 | `LOCK` | `ccspk.lock`（`/tmp/ccspk-<uid>.lock`） | 同時に来たフックを 1 つずつ通すためのロック。`ccspk stop` も PIDFILE を触る前に取る |
+| `DOWN` | `ccspk.down`（`/tmp/ccspk-<uid>.down`） | ssh 先へマスター接続を張れなかった時刻（mtime）。`RETRY_AFTER` 秒のうちは張り直さない |
 | `PARTS` | `ccspk.parts/`（`/tmp/ccspk-<uid>.parts/`） | MessageDisplay の分。`<message_id>.<index>` と、最後の分の番号を書いた `<message_id>.final` |
 
 ### 3.6 整形と分割
@@ -344,6 +389,8 @@ PID で待たずに pidfd で待つのは、前の子プロセスが終わって
 話者は `user_dict.speaker()` が決める。`SPEAKER_FILE`（`~/.config/ccspk/speaker`。`ccspk speaker` が書く）の番号で、無い・数でないときは `SPEAKER`（119、夜語トバリ・明るい）。フックの子プロセスと `say` は `play()` の初めに 1 回だけ読み、`dict add --speak` と読み間違いの点検（`user_dict.query()`）は呼ぶたびに読む。`ccspk speaker` はエンジンの `/speakers` を `styles()` で (番号, 名前, スタイル) に並べ、`pick()` で引数から番号を引く。
 
 音量は `user_dict.volume()` が決める。`VOLUME_FILE`（`~/.config/ccspk/volume`。`ccspk volume` が書く）の値で、無い・0〜1.0 の数でないときは 1.0。`pw_play()` がこれを `pw-play --volume=` に付けた引数を作る。話者と同じく、フックの子プロセスと `say` は `play()` の初めに 1 回だけ読み、`dict add --speak` は呼ぶたびに読む。`speaker`・`volume` のファイルは `write_config()` が別のファイルに書いてから置き換えるので、書いている途中に読まれても前の値で読む。
+
+ssh 先は `user_dict.remote()` が決める。`REMOTE_FILE`（`~/.config/ccspk/remote`。`ccspk remote` が書き、`--off` で消す）のホストで、無い・空のときは `None`（手元で鳴らす）。`pw_play()`・`save()`・`unusable()` が呼ぶたびに読む（[「3.4.1 ssh 先で鳴らす」](#341-ssh-先で鳴らす)）。
 
 ### 3.8 自動の点検
 
@@ -459,7 +506,8 @@ hook の `demo()` は、整形と分割（`to_speech`、`drop_commit_ids`、`cli
 子プロセスの振り分け（`child_args`・`run_child`。`--after=` の pidfd のプロセスが終わるまで鳴らさないことも）、子プロセスを全部止める `stop_playing()`（偽の子プロセスで。使い回された番号は触らない）と `playing()`、`switch()`、要約と翻訳（`rewrite`。`PATH` の先頭に置いた偽の `claude` で、渡す指示、失敗・空・時間切れも。
 `claude` が無い例は `PATH` を一時ディレクトリだけにし、本物を起こさない）、告げる文と失敗したときの読み方（`play_rewritten`。
 順番に読むモードで、`claude -p` を前の子プロセスを待つ前に走らせることも）を `assert` で確かめている（pytest ではない）。
-dict の `demo()` は、アクセントの位置の決め方（`accent_of`）、全角から半角へ戻す `halfwidth`、話者の番号の引き方（`pick`）と、話者のファイルが無い・数でないときの既定（`speaker`）、音量のファイルが無い・範囲の外・数でないときの既定（`volume`・`pw_play`）を確かめている（後の 2 つは一時ディレクトリで）。
+dict の `demo()` は、アクセントの位置の決め方（`accent_of`）、全角から半角へ戻す `halfwidth`、話者の番号の引き方（`pick`）と、話者のファイルが無い・数でないときの既定（`speaker`）、音量のファイルが無い・範囲の外・数でないときの既定（`volume`・`pw_play`）、ssh 先のファイルが無い・空のときと、あるときの `pw_play` の引数（`remote`）を確かめている（後の 3 つは一時ディレクトリで）。
+見張り（`watched`）は手元の `sh` で、標準出力の先を閉じるとグループごと止まること、走らせたコマンドの終了コードで終わることを確かめている。
 check の `demo()` は、単語の切り出し（`extract`）、`claude` の返答の読み取り（`parse`）、点検を起こす条件
 （`pending`）と `SPOKEN` の切り詰め（`record`）を確かめている（後の 2 つは一時ディレクトリで）。
 通れば `ok` と出る。個別に走らせる手段は無い。lint の設定は無い。
@@ -468,7 +516,7 @@ check の `demo()` は、単語の切り出し（`extract`）、`claude` の返�
 uv run ccspk test   # hook・dict・check の demo() を全部
 ```
 
-整形や分割を変えたら、`demo()` に例を足す。`unusable()` と `main()` の分岐は
+整形や分割を変えたら、`demo()` に例を足す。`unusable()`・`reachable()` と `main()` の分岐は
 環境に依るので、`demo()` では確かめていない。下の手順で手で確かめる。
 
 ### 4.2 フックを手で動かす

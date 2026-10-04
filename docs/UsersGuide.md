@@ -65,7 +65,7 @@ unit ファイルのパスを揃えて書き換え、`systemctl --user daemon-re
 （unit ファイルの `ExecStartPost`。`~/.local/bin/ccspk` を使うので、先に `ccspk` を
 インストールしておく）。詳しくは [辞書のファイル](#21-辞書のファイル)。
 
-整形が正しく動くかは [`ccspk test`](#311-ccspk-test) で確認できる。
+整形が正しく動くかは [`ccspk test`](#312-ccspk-test) で確認できる。
 
 ### 1.2 Claude Code の設定
 
@@ -177,10 +177,40 @@ Claude（Sonnet）に日本語へ訳させてから読む（[`ccspk translate`](
 システムの音量とは別に、読み上げの音量だけを `ccspk volume 0.6` のように 0〜1.0 で決められる
 （[`ccspk volume`](#310-ccspk-volume)）。既定は 1.0。
 
+### 1.11 ssh 先の VOICEVOX で鳴らす
+
+このマシンに VOICEVOX が無いときは、ssh でつながる別のマシンのエンジンで合成し、そのマシンの `pw-play` で鳴らせる
+（[`ccspk remote`](#311-ccspk-remote)）。ssh 先には、[1.1](#11-voicevox-エンジン) のとおりエンジンと `ccspk` を入れておく。
+
+1. `~/.ssh/config` で、エンジンのポートを手元へ転送し、接続を使い回すようにする。鍵で、パスワードを聞かれずにつながるようにしておく
+
+   ```
+   Host vvhost
+   	HostName 192.168.0.10
+   	LocalForward 50021 127.0.0.1:50021
+   	ControlMaster auto
+   	ControlPath ~/.ssh/cm-%C
+   	ControlPersist 10m
+   ```
+
+2. `ccspk remote vvhost` を実行する
+
+```mermaid
+flowchart LR
+    PL["再生の子プロセス"] -- "合成（127.0.0.1:50021）" --> FW["ssh の LocalForward"] --> VV["ssh 先の VOICEVOX エンジン"]
+    PL -- "wav" --> SSH["ssh"] --> PWP["ssh 先の pw-play"]
+    D["dict add など"] -- "辞書を書き出す（ssh）" --> UD[("ssh 先の ~/.config/ccspk/user_dict.json")]
+```
+
+接続は、エンジンにつながらないときにフックが張る（`ssh -fN`）。張れなかったら、1 分のあいだは張り直さずに読み上げを飛ばす。
+`ccspk say`・`ccspk dict` などは接続を張らないので、接続が切れているときは `ssh -fN vvhost` で張ってから使う。読み上げを止めると、ssh 先の `pw-play` も 0.1 秒ほどで止まる。
+辞書は ssh 先のエンジンに登録され、ssh 先の辞書のファイルへ書き出す（手元のファイルには書かない）。
+手元で鳴らすのに戻すときは `ccspk remote --off`。
+
 ## 2. 読み上げの辞書
 
 返答の読み上げで読み間違える単語は、VOICEVOX のエンジンのユーザー辞書で読みを直す。
-操作はどれも [`ccspk dict`](#312-ccspk-dict) のサブコマンドで行う。
+操作はどれも [`ccspk dict`](#313-ccspk-dict) のサブコマンドで行う。
 
 1. `ccspk dict kana` で、エンジンが今どう読むかを確認する
 2. `ccspk dict add` で表記と読みを登録する。登録後の読みが表示される
@@ -238,7 +268,7 @@ ccspk dict add README リードミー --speak
 ### 2.3 読み間違いの自動の点検
 
 読み上げた文から単語を切り出し、読み間違いを Claude（Opus）に判定させて、誤りは辞書に登録する。
-確認は挟まない。登録した単語は [`ccspk dict auto`](#317-ccspk-dict-auto) で見直し、まとめて消せる。
+確認は挟まない。登録した単語は [`ccspk dict auto`](#318-ccspk-dict-auto) で見直し、まとめて消せる。
 
 - 点検するのは、英字を含む単語（`README.md`・`CLI` など。1 字は除く）と、漢字を含む 2 字以上の名詞
   （`優先度`・`作業中` など）。動詞の活用形（`試さ`）と 1 字の漢字（`行`）は、文によって読みが
@@ -332,6 +362,10 @@ Claude Code の Stop・MessageDisplay・PreToolUse フックとして動く。�
 - 鳴らせない。`pw-play` が無い、エンジン（127.0.0.1:50021）に接続できない、PipeWire が
   動いていない、のどれか。理由をファイルに記録する。環境変数 `PIPEWIRE_REMOTE` があるときは、
   PipeWire は確認しない（`[a,b]` のような形も取り、つながる先をフックの側で決めきれないため）
+- [`ccspk remote`](#311-ccspk-remote) で ssh 先を決めているときは、上の代わりに次を見る。
+  `ssh` が無ければ、理由をファイルに記録する。エンジンに接続できなければ、`ssh -fN` で接続を張って
+  試し直し、それでも接続できなければ読み上げずに終わる（ssh 先が落ちているだけのこともあるので、記録しない）。
+  張れなかったときは、1 分のあいだは張り直さずに終わる（フックが待たせないため。張るのは最長 5 秒待つ）
 
 **終了ステータス**
 
@@ -572,7 +606,7 @@ ccspk speaker --list
 読み上げの話者（[1.9](#19-話者を変える)）を、番号か、名前とスタイルで決める。スタイルを省くと、その話者の最初のスタイル。
 決めた後の話者を `番号  名前  スタイル` で表示する。引数が無ければ今の話者を表示する。
 今の話者の番号がエンジンに無ければ、`番号  （エンジンの話者に無い）` と表示する。
-次の読み上げから効き、フック・[`ccspk say`](#33-ccspk-say)・[`ccspk dict add --speak`](#314-ccspk-dict-add)・
+次の読み上げから効き、フック・[`ccspk say`](#33-ccspk-say)・[`ccspk dict add --speak`](#315-ccspk-dict-add)・
 [読み間違いの自動の点検](#23-読み間違いの自動の点検)のすべてが使う。読んでいる途中で変えても、その読み上げの声は変わらない。
 
 どの使い方もエンジン（127.0.0.1:50021）に接続し、`/speakers` にある番号・名前だけを受け付ける。
@@ -625,7 +659,7 @@ ccspk volume [音量]
 
 読み上げの音量（[1.10](#110-音量を変える)）を 0〜1.0 で決め、決めた後の音量を表示する。引数が無ければ今の音量を表示する。
 `pw-play --volume` に渡す値で、システムの音量とは別に効く。
-次の読み上げから効き、フック・[`ccspk say`](#33-ccspk-say)・[`ccspk dict add --speak`](#314-ccspk-dict-add) が使う。
+次の読み上げから効き、フック・[`ccspk say`](#33-ccspk-say)・[`ccspk dict add --speak`](#315-ccspk-dict-add) が使う。
 読んでいる途中で変えても、その読み上げの音量は変わらない。
 
 **引数**
@@ -651,7 +685,58 @@ $ ccspk volume 0.6
 0.6
 ```
 
-### 3.11 ccspk test
+### 3.11 ccspk remote
+
+```
+ccspk remote [HOST]
+ccspk remote --off
+```
+
+**説明**
+
+読み上げを ssh 先の `HOST` の `pw-play` で鳴らす（[1.11](#111-ssh-先の-voicevox-で鳴らす)）。決めた後の ssh 先を表示し、
+手元で鳴らすときは `off` と表示する。引数が無ければ今の ssh 先を表示する。
+次の読み上げから効き、フック・[`ccspk say`](#33-ccspk-say)・[`ccspk dict add --speak`](#315-ccspk-dict-add) が使う。
+
+ssh 先を決めているあいだは、次のようになる。
+
+- 再生は `ssh HOST` で ssh 先の `pw-play` に任せる。音量（[`ccspk volume`](#310-ccspk-volume)）は手元で決めた値を渡す。
+  読み上げを止めると、ssh 先の `pw-play` も止まる
+- エンジンへは、今までどおり 127.0.0.1:50021 につなぐ。`~/.ssh/config` の `LocalForward` で ssh 先のエンジンへ転送する
+- [`ccspk dict`](#313-ccspk-dict) が書き出す[辞書のファイル](#21-辞書のファイル)は、ssh 先の
+  `~/.config/ccspk/user_dict.json`（ssh 先に `$XDG_CONFIG_HOME` があればその下）になる。手元のファイルには書かない
+
+`HOST` か `--off` を渡すと、鳴らせない理由のファイル（[`ccspk status`](#35-ccspk-status)）も消す。
+
+**引数**
+
+- `HOST` — ssh のホスト名か、`~/.ssh/config` の `Host`。空白を含むもの、`-` で始まるものは断る
+
+**オプション**
+
+- `--off` — ssh 先を消し、手元の `pw-play` で鳴らす
+
+**終了ステータス**
+
+- `0` — 成功
+- `2` — 引数の誤り（`HOST` と `--off` を両方渡した、など）
+
+**ファイル**
+
+- `~/.config/ccspk/remote` — 決めた ssh 先（`$XDG_CONFIG_HOME` があれば `$XDG_CONFIG_HOME/ccspk/remote`）
+
+**例**
+
+```console
+$ ccspk remote
+off
+$ ccspk remote vvhost
+vvhost
+$ ccspk remote --off
+off
+```
+
+### 3.12 ccspk test
 
 ```
 ccspk test
@@ -676,7 +761,7 @@ ok
 ok
 ```
 
-### 3.12 ccspk dict
+### 3.13 ccspk dict
 
 ```
 ccspk dict COMMAND [ARGS]...
@@ -688,8 +773,10 @@ VOICEVOX のエンジンのユーザー辞書を操作する。どのサブコ�
 
 `dict add`・`dict remove`・`dict import`・`dict auto --remove` は、成功すると、エンジンの辞書を
 [辞書のファイル](#21-辞書のファイル)へ書き出し、「書き出した: パス」と表示する。
+[`ccspk remote`](#311-ccspk-remote) で ssh 先を決めていれば、ssh 先のファイルへ書き出し、「書き出した: ホスト:~/.config/ccspk/user_dict.json」と
+表示する。ssh 先へ書き出せなければ、終了ステータス `1` で終わる（エンジンの辞書は変わっている）。
 
-### 3.13 ccspk dict kana
+### 3.14 ccspk dict kana
 
 ```
 ccspk dict kana TEXT
@@ -717,7 +804,7 @@ $ ccspk dict kana 'Ponytail を使う'
 ポ'ニテイル、オ'/_ツカウ'
 ```
 
-### 3.14 ccspk dict add
+### 3.15 ccspk dict add
 
 ```
 ccspk dict add [--accent N] [--type TYPE] [--priority N] [--speak] SURFACE PRONUNCIATION
@@ -753,7 +840,7 @@ ccspk dict add [--accent N] [--type TYPE] [--priority N] [--speak] SURFACE PRONU
 
 - `0` — 登録した
 - `1` — エンジンとやり取りできない、読みから音が取れない（カタカナでない）、など。
-  `--speak` で `pw-play` が無い・失敗したときも `1` だが、登録は済んでいる
+  `--speak` で `pw-play`（ssh 先で鳴らすときは `ssh`）が無い・失敗したときも `1` だが、登録は済んでいる
 
 **ファイル**
 
@@ -769,7 +856,7 @@ $ ccspk dict add Ponytail ポニーテール
 読み: ポニイテ'エル
 ```
 
-### 3.15 ccspk dict list
+### 3.16 ccspk dict list
 
 ```
 ccspk dict list
@@ -795,7 +882,7 @@ e8587f70-4e27-4017-aa5c-7c5bfdf4251f  README  リードミー  1  5
 …
 ```
 
-### 3.16 ccspk dict remove
+### 3.17 ccspk dict remove
 
 ```
 ccspk dict remove SURFACE
@@ -827,7 +914,7 @@ $ ccspk dict remove Ponytail
 書き出した: /home/user/.config/ccspk/user_dict.json
 ```
 
-### 3.17 ccspk dict auto
+### 3.18 ccspk dict auto
 
 ```
 ccspk dict auto [--remove]
@@ -837,8 +924,8 @@ ccspk dict auto [--remove]
 
 [自動の点検](#23-読み間違いの自動の点検)で登録した単語を、登録した順に 1 単語 1 行で一覧する
 （日時・表記・正しい読み・エンジンの元の読み）。無ければ「自動で登録した単語は無い」と表示する。
-1 つずつ消すなら [`ccspk dict remove`](#316-ccspk-dict-remove)、読みを直すなら
-[`ccspk dict add`](#314-ccspk-dict-add) を使う。どちらも、その単語を一覧から外す。
+1 つずつ消すなら [`ccspk dict remove`](#317-ccspk-dict-remove)、読みを直すなら
+[`ccspk dict add`](#315-ccspk-dict-add) を使う。どちらも、その単語を一覧から外す。
 
 **オプション**
 
@@ -866,7 +953,7 @@ $ ccspk dict auto --remove
 書き出した: /home/user/.config/ccspk/user_dict.json
 ```
 
-### 3.18 ccspk dict export
+### 3.19 ccspk dict export
 
 ```
 ccspk dict export [FILE]
@@ -892,7 +979,7 @@ ccspk dict export [FILE]
 ccspk dict export backup.json
 ```
 
-### 3.19 ccspk dict import
+### 3.20 ccspk dict import
 
 ```
 ccspk dict import [FILE]

@@ -17,12 +17,17 @@
 （systemd/voicevox-engine.service の ExecStartPost）。
 `speaker` は読み上げの話者を SPEAKER_FILE に残す。フック・say・dict add --speak・読み間違いの点検が使う。
 `volume` は読み上げの音量（pw-play --volume）を VOLUME_FILE に残す。フック・say・dict add --speak が使う。
+`remote`（hook.py）で REMOTE_FILE にホストを残すと、pw-play を ssh 先で走らせ、DICT_FILE の代わりに
+ssh 先の ~/.config/ccspk/user_dict.json へ書き出す。エンジンへは ~/.ssh/config の LocalForward でつなぐ。
 """
 
+import io
 import json
 import math
 import os
+import shlex
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -43,6 +48,7 @@ SPEAKER = 119  # 夜語トバリ（明るい）。ccspk speaker で決めてい�
 DICT_FILE = Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config") / "ccspk" / "user_dict.json"
 SPEAKER_FILE = DICT_FILE.parent / "speaker"  # ccspk speaker で決めた話者の番号
 VOLUME_FILE = DICT_FILE.parent / "volume"  # ccspk volume で決めた音量（0〜1.0）
+REMOTE_FILE = DICT_FILE.parent / "remote"  # ccspk remote で決めた ssh 先のホスト
 # 自動の点検（check.py）の状態のディレクトリと、自動で登録した単語の一覧
 # （日時<TAB>表記<TAB>正しい読み<TAB>エンジンの元の読み）
 STATE = Path(os.environ.get("XDG_STATE_HOME") or Path.home() / ".local/state") / "ccspk"
@@ -90,9 +96,32 @@ def volume():
     return v if 0 <= v <= 1 else 1.0  # nan もここで 1.0 になる
 
 
+def remote():
+    """ccspk remote で決めたホスト。REMOTE_FILE が無い・読めない・空のときは None。"""
+    try:
+        return REMOTE_FILE.read_text().strip() or None
+    except OSError:
+        return None
+
+
+def ssh(host, script):
+    """host で script を sh に走らせる ssh の引数。パスワードを聞きに止まらないよう BatchMode にする。"""
+    return ["ssh", "-o", "BatchMode=yes", host, "sh", "-c", shlex.quote(script)]
+
+
+def watched(args):
+    """args を走らせ、標準出力の先が閉じたらプロセスグループごと止める sh のスクリプト。終了コードは args のもの。
+    ssh を止めても、リモートの pw-play は標準入力を読み終えているので鳴り続ける（SIGTERM でも SIGKILL でも）。
+    見張りが 0.1 秒ごとに標準出力へ書き、接続が切れて書けなくなったら止める。args が終われば見張りも止める。
+    グループごと止めるのは、sshd がコマンドを自分のセッション（グループ）で走らせるため。"""
+    return f'(trap "" PIPE; while sleep 0.1; do echo 2>/dev/null || kill 0; done) & w=$!; {shlex.join(args)}; r=$?; kill $w; exit $r'
+
+
 def pw_play():
-    """wav を標準入力から鳴らす pw-play の引数。"""
-    return ["pw-play", f"--volume={volume()}", "-"]
+    """wav を標準入力から鳴らす pw-play の引数。remote() があれば ssh 先で鳴らす。"""
+    args = ["pw-play", f"--volume={volume()}", "-"]
+    host = remote()
+    return ssh(host, watched(args)) if host else args
 
 
 def write_config(path, value):
@@ -159,7 +188,23 @@ def dump(file):
 
 
 def save():
-    """エンジンの辞書を DICT_FILE へ書き出す。書きかけで落ちても前のファイルが残るよう、一時ファイルから置き換える。"""
+    """エンジンの辞書を DICT_FILE へ書き出す。書きかけで落ちても前のファイルが残るよう、一時ファイルから置き換える。
+    remote() があれば、ssh 先のエンジンが起動時に読む ssh 先のファイルへ書き出す（手元には書かない）。"""
+    if host := remote():
+        buf = io.StringIO()
+        dump(buf)
+        data = buf.getvalue().encode()
+        d = '"${XDG_CONFIG_HOME:-$HOME/.config}/ccspk"'
+        # 送っている途中で切れても cat は正常に終わるので、大きさがそろったときだけ置き換える
+        script = f'mkdir -p {d} && cat > {d}/user_dict.tmp && [ "$(wc -c < {d}/user_dict.tmp)" -eq {len(data)} ] && mv {d}/user_dict.tmp {d}/user_dict.json'
+        try:
+            failed = subprocess.run(ssh(host, script), input=data, timeout=30).returncode
+        except subprocess.TimeoutExpired:  # 裏の点検（check.py）を止めたままにしない
+            failed = True
+        if failed:
+            sys.exit(f"{host} へ書き出せなかった（エンジンの辞書は変わっている）")
+        print(f"書き出した: {host}:~/.config/ccspk/user_dict.json")
+        return
     DICT_FILE.parent.mkdir(parents=True, exist_ok=True)
     tmp = DICT_FILE.with_suffix(".tmp")
     with tmp.open("w", encoding="utf-8") as f:
@@ -241,6 +286,26 @@ def demo():
     finally:
         shutil.rmtree(VOLUME_FILE.parent)
         VOLUME_FILE = saved
+    # ssh 先で鳴らす。ホストが無い・空なら手元
+    global REMOTE_FILE
+    saved, REMOTE_FILE = REMOTE_FILE, Path(tempfile.mkdtemp()) / "remote"
+    try:
+        assert remote() is None and pw_play()[0] == "pw-play"
+        REMOTE_FILE.write_text("\n")
+        assert remote() is None
+        write_config(REMOTE_FILE, "ytlenovo")
+        assert pw_play() == ["ssh", "-o", "BatchMode=yes", "ytlenovo", "sh", "-c", shlex.quote(watched(["pw-play", f"--volume={volume()}", "-"]))]
+    finally:
+        shutil.rmtree(REMOTE_FILE.parent)
+        REMOTE_FILE = saved
+    # 見張り。標準出力の先が閉じたら止め、鳴り終われば見張りも終わる
+    p = subprocess.Popen(["sh", "-c", watched(["sleep", "30"])], stdout=subprocess.PIPE, start_new_session=True)
+    p.stdout.read(1)
+    p.stdout.close()
+    assert p.wait(3) == -signal.SIGTERM, p.returncode
+    for code in (0, 3):
+        r = subprocess.run(["sh", "-c", watched(["sh", "-c", f"exit {code}"])], stdout=subprocess.PIPE, start_new_session=True, timeout=3)
+        assert r.returncode == code, r.returncode
     print("ok")
 
 
@@ -267,11 +332,13 @@ def add(surface, pronunciation, accent, type_, priority, speak):
     q = query(surface)
     print(f"読み: {q['kana']}")
     if speak:
-        if not shutil.which("pw-play"):
-            sys.exit("pw-play が無いので鳴らせない（登録は済んだ）")
+        player = pw_play()
+        if not shutil.which(player[0]):
+            sys.exit(f"{player[0]} が無いので鳴らせない（登録は済んだ）")
         wav = call("POST", "/synthesis", data=json.dumps(q).encode(), speaker=speaker())
-        if subprocess.run(pw_play(), input=wav).returncode:
-            sys.exit("pw-play が失敗した（登録は済んだ）")
+        # ssh 先で鳴らすときは、見張りの改行が標準出力に来るので捨てる
+        if subprocess.run(player, input=wav, stdout=subprocess.DEVNULL).returncode:
+            sys.exit(f"{player[0]} が失敗した（登録は済んだ）")
 
 
 @dict_group.command("kana")
