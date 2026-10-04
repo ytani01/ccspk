@@ -3,6 +3,10 @@
 Claude Code の返答を、手元の VOICEVOX（既定は夜語トバリ・明るい）で読み上げるフック。
 長い返答は要約し、英文の返答は日本語に訳して読む。
 
+https://github.com/user-attachments/assets/65d10fb7-2f24-4e51-8e0d-ad56de638f9e
+
+返答の読み上げ・長文の要約・英文の翻訳のデモ（音が出ます。待ち時間は詰めてあります）。音声: VOICEVOX:夜語トバリ
+
 ## 1. 特徴
 
 - **長い返答は要約して読む。** `ccspk summary on` にすると、180 字を超える返答は Claude に 180 字ほどに要約させてから読む。
