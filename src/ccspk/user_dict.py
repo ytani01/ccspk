@@ -4,7 +4,7 @@
   ccspk dict kana <文>
   ccspk dict list
   ccspk dict remove <表記>
-  ccspk dict auto [--remove]
+  ccspk dict auto [--remove [表記...]]
   ccspk dict export [FILE]
   ccspk dict import [FILE]
   ccspk speaker [番号 | 名前 [スタイル]] [--list]
@@ -259,6 +259,9 @@ def demo():
     assert pick(("5",), found) is None  # エンジンに無い番号
     assert pick(("夜語トバリ", "明るい"), found) == 119 and pick(("四国めたん",), found) == 2  # 省くと最初のスタイル
     assert pick(("夜語トバリ", "あまあま"), found) is None and pick(("夜語",), found) is None
+    rows = [["t1", "pytest", "パイテスト", "x"], ["t2", "ＣＬＩ", "シーエルアイ", "x"], ["t3", "優先度", "ユウセンド", "x"]]
+    assert auto_rows(rows, ("pytest", "CLI")) == ([rows[0], rows[1]], [])  # 全角で記録されていても半角で選べる
+    assert auto_rows(rows, ("pytest", "nope")) == ([rows[0]], ["nope"])
     # 話者のファイル。無い・数でないときは SPEAKER
     global SPEAKER_FILE
     saved, SPEAKER_FILE = SPEAKER_FILE, Path(tempfile.mkdtemp()) / "speaker"
@@ -370,18 +373,26 @@ def remove(surface):
 
 
 @dict_group.command("auto")
-@click.option("--remove", "remove_", is_flag=True, help="一覧の単語を全部エンジンから消し、一覧を空にする")
-def auto(remove_):
+@click.option("--remove", "remove_", is_flag=True, help="一覧の単語をエンジンから消し、一覧から外す。SURFACES（表記）を渡せばその単語だけ")
+@click.argument("surfaces", nargs=-1)
+def auto(remove_, surfaces):
     """自動の点検で登録した単語を一覧する（日時・表記・正しい読み・エンジンの元の読み）。"""
+    if surfaces and not remove_:
+        raise click.UsageError("表記を渡すときは --remove を付ける")
     try:
         rows = [r.split("\t") for r in ADDED.read_text(encoding="utf-8").splitlines() if r]
     except FileNotFoundError:
         rows = []
+    if surfaces:
+        rows, missing = auto_rows(rows, surfaces)
+        if missing:
+            sys.exit(f"自動で登録した単語に無い: {'、'.join(missing)}")
     if not rows:
         print("自動で登録した単語は無い")
         return
-    for r in rows:
-        print("  ".join(r))
+    if not surfaces:
+        for r in rows:
+            print("  ".join(r))
     if not remove_:
         return
     for r in rows:
@@ -391,8 +402,16 @@ def auto(remove_):
             print(f"消した: {r[1]}（ID {uuid}）")
         else:
             print(f"登録されていない（飛ばした）: {r[1]}")
-    ADDED.write_text("", encoding="utf-8")
+        forget_auto(r[1])
     save()
+
+
+def auto_rows(rows, surfaces):
+    """自動で登録した単語の記録の行から、SURFACES の行を選ぶ。(選んだ行, 記録に無い表記)。表記は NFKC で比べる。"""
+    keys = {unicodedata.normalize("NFKC", s): s for s in surfaces}
+    picked = [r for r in rows if unicodedata.normalize("NFKC", r[1]) in keys]
+    found = {unicodedata.normalize("NFKC", r[1]) for r in picked}
+    return picked, [s for k, s in keys.items() if k not in found]
 
 
 @dict_group.command("export")

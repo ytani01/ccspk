@@ -275,7 +275,7 @@ ccspk dict add README リードミー --speak
 ### 2.3 読み間違いの自動の点検
 
 読み上げた文から単語を切り出し、読み間違いを Claude（Opus）に判定させて、誤りは辞書に登録する。
-確認は挟まない。登録した単語は [`ccspk dict auto`](#318-ccspk-dict-auto) で見直し、まとめて消せる。
+確認は挟まない。登録した単語は [`ccspk dict auto`](#318-ccspk-dict-auto) で見直し、まとめても 1 語ずつでも消せる。
 
 - 点検するのは、英字を含む単語（`README.md`・`CLI` など。1 字は除く）と、漢字を含む 2 字以上の名詞
   （`優先度`・`作業中` など）。動詞の活用形（`試さ`）と 1 字の漢字（`行`）は、文によって読みが
@@ -924,25 +924,31 @@ $ ccspk dict remove Ponytail
 ### 3.18 ccspk dict auto
 
 ```
-ccspk dict auto [--remove]
+ccspk dict auto [--remove [表記...]]
 ```
 
 **説明**
 
 [自動の点検](#23-読み間違いの自動の点検)で登録した単語を、登録した順に 1 単語 1 行で一覧する
 （日時・表記・正しい読み・エンジンの元の読み）。無ければ「自動で登録した単語は無い」と表示する。
-1 つずつ消すなら [`ccspk dict remove`](#317-ccspk-dict-remove)、読みを直すなら
-[`ccspk dict add`](#315-ccspk-dict-add) を使う。どちらも、その単語を一覧から外す。
+読みを直すなら [`ccspk dict add`](#315-ccspk-dict-add) を使う。[`ccspk dict remove`](#317-ccspk-dict-remove) で
+消しても、`dict add` で直しても、その単語は一覧から外れる。
+
+**引数**
+
+- `表記` — `--remove` で消す単語の表記（いくつでも）。省くと一覧の単語を全部消す
 
 **オプション**
 
-- `--remove` — 一覧した単語を全部エンジンから消し、一覧を空にする。エンジンに無い単語は飛ばす。
+- `--remove` — 一覧した単語を全部エンジンから消し、一覧を空にする。表記を渡せば、その単語だけを消して
+  一覧から外す（このときは一覧を表示しない）。表記は全角・半角を区別しない。エンジンに無い単語は飛ばす。
   消した単語は点検済みのままなので、自動では登録し直さない
 
 **終了ステータス**
 
 - `0` — 一覧した・消した
-- `1` — エンジンとやり取りできない（`--remove` のとき）
+- `1` — エンジンとやり取りできない（`--remove` のとき）。一覧に無い表記を渡した（何も消さない）
+- `2` — `--remove` を付けずに表記を渡した
 
 **ファイル**
 
@@ -954,6 +960,10 @@ ccspk dict auto [--remove]
 ```console
 $ ccspk dict auto
 2026-09-29 16:03:17  pytest  パイテスト  ピュ'テスト
+2026-09-30 10:12:45  CLI  シーエルアイ  クリ
+$ ccspk dict auto --remove CLI
+消した: CLI（ID 0c4e0f1a-6a2b-4d8e-9f3c-2b7d5e1a9c40）
+書き出した: /home/user/.config/ccspk/user_dict.json
 $ ccspk dict auto --remove
 2026-09-29 16:03:17  pytest  パイテスト  ピュ'テスト
 消した: pytest（ID 3b637b7e-9345-4dcc-9259-d757e434af01）

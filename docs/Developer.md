@@ -477,7 +477,8 @@ sequenceDiagram
 `STATE` と `ADDED` は `user_dict.py` に置き、`check.py` はそれを import する（`dict auto` も `ADDED` を使う）。
 
 `dict add`・`dict remove` は `forget_auto()` で、その単語を `ADDED` から外す。`dict auto` は `ADDED` を
-一覧し、`--remove` で載っている単語を全部エンジンから消して `ADDED` を空にする。
+一覧し、`--remove` で載っている単語を全部エンジンから消して `forget_auto()` で外す。表記を渡せば、
+`auto_rows()` で選んだ単語だけを消す。
 
 状態のファイルは `STATE`（`$XDG_STATE_HOME/ccspk`、無ければ `~/.local/state/ccspk`）に置く。
 中身は [UsersGuide](UsersGuide.md#23-読み間違いの自動の点検) にもある。
