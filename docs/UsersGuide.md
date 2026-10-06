@@ -52,14 +52,21 @@ gh release download 0.25.2 -R VOICEVOX/voicevox_engine \
 7z x -o0.25.2 voicevox_engine-linux-cpu-x64-0.25.2.vvpp
 chmod +x 0.25.2/run
 rm voicevox_engine-linux-cpu-x64-0.25.2.vvpp
-systemctl --user link ~/work/ccspk/systemd/voicevox-engine.service
+install -Dm644 ~/work/ccspk/systemd/voicevox-engine.service \
+  ~/.config/systemd/user/voicevox-engine.service
+systemctl --user daemon-reload
 systemctl --user enable --now voicevox-engine.service
 curl -s http://127.0.0.1:50021/version   # "0.25.2" が返れば起動している
 ```
 
+unit ファイルはリンクせずにコピーして置くので、clone を動かしたり消したりしてもエンジンは動く。
+リポジトリの unit ファイルが変わったときは、同じ `install` でコピーし直し
+（下のとおりバージョンを書き換えていたら、もう一度書き換える）、
+`systemctl --user daemon-reload` してから再起動する。
+
 再生には `pw-play`（PipeWire）を使う。バージョンを上げるときは、展開先と
-unit ファイルのパスを揃えて書き換え、`systemctl --user daemon-reload` してから
-再起動する。
+`~/.config/systemd/user/voicevox-engine.service` のパスを揃えて書き換え、
+`systemctl --user daemon-reload` してから再起動する。
 
 エンジンが起動するたびに、`~/.config/ccspk/user_dict.json` があれば辞書に読み込む
 （unit ファイルの `ExecStartPost`。`~/.local/bin/ccspk` を使うので、先に `ccspk` を
