@@ -17,7 +17,7 @@ import time
 import unicodedata
 from pathlib import Path  # demo() で使う
 
-from .user_dict import ADDED, STATE, call, query, register, save
+from .user_dict import ADDED, STATE, call, google, query, register, save
 
 SPOKEN = STATE / "spoken.txt"  # 読み上げた文。1 行 1 文
 SPOKEN_MAX = 64 * 1024  # これを超えたら後ろ半分の行だけ残す
@@ -60,7 +60,8 @@ def after_stop():
         print(json.dumps({"systemMessage": f"ccspk の読みの点検が失敗した: {msg}"}, ensure_ascii=False))
     except OSError:
         pass
-    if not pending():
+    # google のときはエンジンが止まっていることもある。読んだ文は SPOKEN に溜め、voicevox に戻したら点検する
+    if google() or not pending():
         return
     try:
         subprocess.Popen(

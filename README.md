@@ -38,6 +38,7 @@ https://github.com/user-attachments/assets/03d95171-ae33-4724-9b1e-4e4c5fc117db
 - `ccspk translate` で、英文の返答を日本語に訳して読むかを切り替えます
 - `ccspk speaker` で、読み上げの話者を変えます
 - `ccspk volume` で、読み上げの音量を変えます
+- `ccspk engine` で、合成を VOICEVOX と Google 翻訳の TTS のどちらで行うかを切り替えます。`--speed` で読み上げの速さも変えられます
 - `ccspk remote` で、ssh でつながる別のマシンの VOICEVOX で読み上げます
 
 ## 3. 注意事項
@@ -47,9 +48,11 @@ https://github.com/user-attachments/assets/03d95171-ae33-4724-9b1e-4e4c5fc117db
 
 | 使うところ | モデル | いつ動くか | 1 回のトークン量 |
 |------------|--------|------------|------------------|
-| 読み間違いの自動の点検 | Opus | 返答が終わるたび、まだ点検していない単語があるとき（切る設定は無い） | 10〜30 単語で入力 約 7,000・出力 100〜450 |
+| 読み間違いの自動の点検 | Opus | 返答が終わるたび、まだ点検していない単語があるとき（`ccspk engine google` のあいだは動かない） | 10〜30 単語で入力 約 7,000・出力 100〜450 |
 | 要約 | Sonnet | `ccspk summary on` のとき、180 字を超える返答で。途中の文章や質問も要約する | 入力 約 8,000・出力 約 150 |
 | 翻訳 | Sonnet | `ccspk translate on` のとき、英文の返答で（要約する長さなら要約だけ）。途中の文章や質問も訳す | 入力 3,000〜6,500・出力 約 250 |
+
+`ccspk engine google` のあいだは、読み上げる文を Google 翻訳の TTS へ送ります。
 
 ## 4. 文書
 

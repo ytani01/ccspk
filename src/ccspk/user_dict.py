@@ -49,6 +49,8 @@ DICT_FILE = Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config") /
 SPEAKER_FILE = DICT_FILE.parent / "speaker"  # ccspk speaker で決めた話者の番号
 VOLUME_FILE = DICT_FILE.parent / "volume"  # ccspk volume で決めた音量（0〜1.0）
 REMOTE_FILE = DICT_FILE.parent / "remote"  # ccspk remote で決めた ssh 先のホスト
+ENGINE_FILE = DICT_FILE.parent / "engine"  # ccspk engine で決めた合成の手段（voicevox・google）
+SPEEDS = (0.5, 2.0)  # ccspk engine --speed の範囲。エンジンは外も受けるが、聞き取れる範囲に絞る
 # 自動の点検（check.py）の状態のディレクトリと、自動で登録した単語の一覧
 # （日時<TAB>表記<TAB>正しい読み<TAB>エンジンの元の読み）
 STATE = Path(os.environ.get("XDG_STATE_HOME") or Path.home() / ".local/state") / "ccspk"
@@ -102,6 +104,28 @@ def remote():
         return REMOTE_FILE.read_text().strip() or None
     except OSError:
         return None
+
+
+def google():
+    """ccspk engine google で、Google 翻訳の TTS で合成するか。ENGINE_FILE が無い・読めない・ほかの値なら VOICEVOX。"""
+    try:
+        return ENGINE_FILE.read_text().strip() == "google"
+    except OSError:
+        return False
+
+
+def speed_file(name):
+    """ccspk engine --speed で決めた、手段 name（voicevox・google）の速さのファイル。"""
+    return ENGINE_FILE.parent / f"{name}-speed"  # ENGINE_FILE の隣。demo() は ENGINE_FILE ごと一時ディレクトリへ移す
+
+
+def speed(name=None):
+    """手段 name（省くと今の手段）の速さ。ファイルが無い・読めない・SPEEDS の範囲の数でないときは 1.0。"""
+    try:
+        v = float(speed_file(name or ("google" if google() else "voicevox")).read_text())
+    except (OSError, ValueError):
+        return 1.0
+    return v if SPEEDS[0] <= v <= SPEEDS[1] else 1.0  # nan もここで 1.0 になる
 
 
 def ssh(host, script):
@@ -290,6 +314,27 @@ def demo():
     finally:
         shutil.rmtree(VOLUME_FILE.parent)
         VOLUME_FILE, REMOTE_FILE = saved, saved_remote
+    # 合成の手段。google と書いてあるときだけ Google
+    global ENGINE_FILE
+    saved, ENGINE_FILE = ENGINE_FILE, Path(tempfile.mkdtemp()) / "engine"
+    try:
+        assert not google()
+        write_config(ENGINE_FILE, "google")
+        assert google()
+        write_config(ENGINE_FILE, "voicevox")
+        assert not google()
+        # 速さは手段ごと。無い・範囲の外・数でないときは 1.0
+        assert speed() == speed("google") == 1.0
+        write_config(speed_file("google"), 1.3)
+        assert speed() == 1.0 and speed("google") == 1.3
+        write_config(ENGINE_FILE, "google")
+        assert speed() == 1.3
+        for bad in ("2.1", "0.4", "nan", "x"):
+            speed_file("google").write_text(bad)
+            assert speed() == 1.0, bad
+    finally:
+        shutil.rmtree(ENGINE_FILE.parent)
+        ENGINE_FILE = saved
     # ssh 先で鳴らす。ホストが無い・空なら手元
     saved, REMOTE_FILE = REMOTE_FILE, Path(tempfile.mkdtemp()) / "remote"
     try:
@@ -315,6 +360,8 @@ def demo():
 @click.group("dict")
 def dict_group():
     """VOICEVOX のユーザー辞書を操作する。"""
+    if google():
+        click.echo("今は ccspk engine google なので、辞書は読み上げに効かない", err=True)
 
 
 @dict_group.command("add")
@@ -441,6 +488,8 @@ def speaker_(args, show_list):
 
     スタイルを省くと、その話者の最初のスタイル。引数なしは今の話者を表示する。次の読み上げから効く。
     """
+    if google():
+        click.echo("今は ccspk engine google なので、話者は読み上げに効かない", err=True)
     if len(args) > 2 or (show_list and args):
         raise click.UsageError("引数は、番号 1 つか、名前とスタイル。--list とは一緒に使えない")
     found = styles()

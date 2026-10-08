@@ -13,8 +13,8 @@
 |---|---|
 | `pyproject.toml` | コマンド `ccspk` の定義（`uv tool install` で入れる） |
 | `src/ccspk/cli.py` | サブコマンドをまとめる。`ccspk test` もここにある |
-| `src/ccspk/hook.py` | `ccspk hook`・`say`・`stop`・`status`・`summary`・`queue`・`translate`・`remote`。Stop・MessageDisplay・PreToolUse フックとして、返答の冒頭と質問の文を VOICEVOX で読み上げる |
-| `src/ccspk/user_dict.py` | `ccspk dict`・`speaker`・`volume`。VOICEVOX のユーザー辞書を操作する。読み上げの話者（`speaker()`）・音量（`volume()`）・ssh 先（`remote()`）もここで決める |
+| `src/ccspk/hook.py` | `ccspk hook`・`say`・`stop`・`status`・`summary`・`queue`・`translate`・`remote`・`engine`。Stop・MessageDisplay・PreToolUse フックとして、返答の冒頭と質問の文を VOICEVOX（か Google 翻訳の TTS）で読み上げる |
+| `src/ccspk/user_dict.py` | `ccspk dict`・`speaker`・`volume`。VOICEVOX のユーザー辞書を操作する。読み上げの話者（`speaker()`）・合成の手段（`google()`）・音量（`volume()`）・ssh 先（`remote()`）もここで決める |
 | `src/ccspk/check.py` | 読み間違いの自動の点検（`python -m ccspk.check`）。フックが読み上げた文を記録し、Stop で裏で起こす（[「3.8 自動の点検」](#38-自動の点検)） |
 | `src/ccspk/__init__.py` | `__version__`（`--version` で出す版） |
 | `src/ccspk/click_utils.py` | `--debug`・`--version` などの共通オプション |
@@ -98,6 +98,7 @@ MessageDisplay フックとして、`AskUserQuestion` を呼ぶ直前に PreTool
 | `summary [on\|off]` | `SUMMARY` を作る・消す。その後で `summary_on()` の結果を `on`・`off` で表示し、`CCSPK_SUMMARY` が決めていればそのことを添える |
 | `queue [on\|off]` | `QUEUE` を作る・消す（`switch()`。`summary` と共通）。その後で `QUEUE` があるかを `on`・`off` で表示する |
 | `translate [on\|off]` | `TRANSLATE` を作る・消す（`switch()`）。その後で `TRANSLATE` があるかを `on`・`off` で表示する |
+| `engine [voicevox\|google] [--speed 倍率]` | 手段を `ENGINE_FILE` に書く（`write_config()`）。書いたら `UNUSABLE` を消す。`--speed` があれば、書いた後の手段の `speed_file()` に書く。その後で手段と `speed()` を表示する |
 | `remote [HOST\|--off]` | `HOST` を `REMOTE_FILE` に書く（`write_config()`）か、`--off` で消す。どちらでも `UNUSABLE` を消す。その後で `remote()` を、無ければ `off` と表示する |
 
 `hook.py` の `main()`（`ccspk hook`）は、フックとして次の順に進む。
@@ -106,7 +107,7 @@ MessageDisplay フックとして、`AskUserQuestion` を呼ぶ直前に PreTool
 1. 環境変数 `CCSPK_SPEAK` が `1` か
 2. 使えないと覚えたファイル（`UNUSABLE`）が無いか。あれば確かめもせずに終わる
 3. `unusable()` で鳴らせるかを確かめる。だめなら理由を `UNUSABLE` に書いて終わる。
-   `remote()` があれば、続けて `reachable()` でエンジンにつながるかを確かめ、だめなら `UNUSABLE` に書かずに終わる
+   `remote()` があり `google()` が偽なら、続けて `reachable()` でエンジンにつながるかを確かめ、だめなら `UNUSABLE` に書かずに終わる
 4. 標準入力の JSON を読む。MessageDisplay・PreToolUse で `agent_id` があれば終わる
 5. `LOCK` を取る。ここから先は、同時に来たフックを 1 つずつ通す
 6. MessageDisplay なら、`assemble()` で分を `PARTS` に置く。最後の分とそれより前の分が
@@ -136,9 +137,9 @@ flowchart TD
     B -- ある --> E
     B -- 無い --> C{"3. unusable() で鳴らせる"}
     C -- だめ --> CW["理由を UNUSABLE に書く"] --> E
-    C -- 鳴らせる --> R{"remote() がある"}
-    R -- 無い --> D
-    R -- ある --> RR{"reachable()"}
+    C -- 鳴らせる --> R{"remote() があり google() が偽"}
+    R -- いいえ --> D
+    R -- はい --> RR{"reachable()"}
     RR -- だめ --> E
     RR -- つながる --> D{"4. JSON を読む"}
     D -- "読めない・MessageDisplay か PreToolUse で agent_id がある" --> E
@@ -258,6 +259,18 @@ PID で待たずに pidfd で待つのは、前の子プロセスが終わって
 `/synthesis` には `enable_interrogative_upspeak=false` を渡す。渡さないと、エンジンは「？」「?」で終わる文の
 語尾に、上げ調子の「ァ」を 1 音足す（「…ですか」が「…ですかぁ」と伸びて聞こえる）。
 
+`google()`（`ccspk engine google`）が真なら、`play()` は `synthesize()` の代わりに、塊を `google_parts()` で
+`GOOGLE_MAX`（200）字ずつに切り、`google_tts()` で `translate_tts` を GET する。201 字では 400 が返る。
+切れ目は 200 字の中の最後の読点か空白の後ろで、無ければ 200 字ちょうど。返ってくるのは mp3 で、
+`pw-play` は libsndfile で mp3 も読めるので、wav と同じく `pw-play -` に渡す。
+`google()` も `speaker()` と同じく `play()` の初めに 1 回だけ読む。
+
+速さは `user_dict.speed()` が決める。手段ごとに `speed_file()`（`ENGINE_FILE` の隣の `voicevox-speed`・`google-speed`）に
+置き、無い・`SPEEDS`（0.5〜2.0）の範囲の数でないときは 1.0。`play()` の初めに 1 回だけ読む。
+VOICEVOX では `synthesize()` が `/audio_query` の返す JSON の `speedScale` を書き換えて `/synthesis` に渡す。1.0 のときは JSON を読まずにそのまま渡す。
+Google では `tempo()` が mp3 を `ffmpeg` の `atempo` に標準入出力で通し、wav にして返す（1 塊 35ms ほど）。
+1.0 のときは `ffmpeg` を起こさず、`ffmpeg` が無い・失敗したときは元の mp3 をそのまま返す（ふつうの速さで鳴る）。
+
 ### 3.3 前の再生を止める
 
 `stop_playing()` は `PIDFILE` の PID を全部読み、ファイルを消してから、
@@ -271,7 +284,8 @@ PID で待たずに pidfd で待つのは、前の子プロセスが終わって
 `unusable()` は次の順に見て、最初にだめだったものの理由を返す。
 
 1. `pw-play` が `PATH` にあるか
-2. エンジンに TCP で接続できるか。HTTP では問い合わせず、接続できるかだけを見る
+2. エンジンに TCP で接続できるか。HTTP では問い合わせず、接続できるかだけを見る。`google()` が真なら見ない
+   （`main()` も `reachable()` を呼ばない）。Google につながるかは確かめず、つながらなければその読み上げが鳴らないだけ
 3. PipeWire のソケットに接続できるか。場所は `$PIPEWIRE_RUNTIME_DIR`（無ければ
    `$XDG_RUNTIME_DIR`）の `pipewire-0`。`PIPEWIRE_REMOTE` があるときは確かめない
    （理由は [UsersGuide](UsersGuide.md#32-ccspk-hook)）
@@ -403,7 +417,8 @@ sudachipy は読まない（最初の音を遅らせない）。
   記録する（[「3.2 子プロセス」](#32-子プロセス)）。記録は Stop より後になるので、点検は次の Stop に回る
 - `after_stop()` — Stop のとき（`MessageDisplay` でも `PreToolUse` でもない）、`LOCK` を放した後で呼ぶ。
   同じ文を 2 度読まないで返るときも呼ぶ（`MessageDisplay` が記録した分があるため）。
-  `FAILED` があれば中身を `{"systemMessage": …}` で標準出力に出して消す。`pending()` が真なら
+  `FAILED` があれば中身を `{"systemMessage": …}` で標準出力に出して消す。`google()` が真なら、ここで終わる
+  （エンジンが止まっていることもあるので。`SPOKEN` には溜まり続け、`voicevox` に戻した後の Stop で点検する）。`pending()` が真なら
   （`SPOKEN` があり、`CHECKED` が無いか `SPOKEN` より古いとき）、`python -P -m ccspk.check` を
   `start_new_session=True`・入出力は捨てる・`cwd` は `STATE` で起こす
 
@@ -507,7 +522,7 @@ hook の `demo()` は、整形と分割（`to_speech`、`drop_commit_ids`、`cli
 子プロセスの振り分け（`child_args`・`run_child`。`--after=` の pidfd のプロセスが終わるまで鳴らさないことも）、子プロセスを全部止める `stop_playing()`（偽の子プロセスで。使い回された番号は触らない）と `playing()`、`switch()`、要約と翻訳（`rewrite`。`PATH` の先頭に置いた偽の `claude` で、渡す指示、失敗・空・時間切れも。
 `claude` が無い例は `PATH` を一時ディレクトリだけにし、本物を起こさない）、告げる文と失敗したときの読み方（`play_rewritten`。
 順番に読むモードで、`claude -p` を前の子プロセスを待つ前に走らせることも）を `assert` で確かめている（pytest ではない）。
-dict の `demo()` は、アクセントの位置の決め方（`accent_of`）、全角から半角へ戻す `halfwidth`、話者の番号の引き方（`pick`）と、話者のファイルが無い・数でないときの既定（`speaker`）、音量のファイルが無い・範囲の外・数でないときの既定（`volume`・`pw_play`）、ssh 先のファイルが無い・空のときと、あるときの `pw_play` の引数（`remote`）を確かめている（後の 3 つは一時ディレクトリで）。
+dict の `demo()` は、アクセントの位置の決め方（`accent_of`）、全角から半角へ戻す `halfwidth`、話者の番号の引き方（`pick`）と、話者のファイルが無い・数でないときの既定（`speaker`）、音量のファイルが無い・範囲の外・数でないときの既定（`volume`・`pw_play`）、速さが手段ごとに分かれ、ファイルが無い・範囲の外・数でないときは 1.0 になること（`speed`）、ssh 先のファイルが無い・空のときと、あるときの `pw_play` の引数（`remote`）を確かめている（後の 4 つは一時ディレクトリで）。
 見張り（`watched`）は手元の `sh` で、標準出力の先を閉じるとグループごと止まること、走らせたコマンドの終了コードで終わることを確かめている。
 check の `demo()` は、単語の切り出し（`extract`）、`claude` の返答の読み取り（`parse`）、点検を起こす条件
 （`pending`）と `SPOKEN` の切り詰め（`record`）を確かめている（後の 2 つは一時ディレクトリで）。

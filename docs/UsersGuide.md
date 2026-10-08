@@ -1,7 +1,7 @@
 # 使い方
 
 Claude Code が返答や質問を出すたびにフックで `ccspk hook` を起こし、`ccspk` が VOICEVOX エンジンで合成した音を
-`pw-play` で PipeWire に流す。
+`pw-play` で PipeWire に流す。VOICEVOX の代わりに Google 翻訳の TTS でも合成できる（[1.12](#112-google-翻訳の-tts-で鳴らす)）。
 
 ```mermaid
 flowchart LR
@@ -214,6 +214,28 @@ flowchart LR
 辞書は ssh 先のエンジンに登録され、ssh 先の辞書のファイルへ書き出す（手元のファイルには書かない）。
 手元で鳴らすのに戻すときは `ccspk remote --off`。
 
+### 1.12 Google 翻訳の TTS で鳴らす
+
+`ccspk engine google` で、VOICEVOX の代わりに Google 翻訳の TTS（`translate.google.com/translate_tts`）で合成する
+（[`ccspk engine`](#321-ccspk-engine)）。VOICEVOX エンジンが動いていなくても鳴る。戻すときは `ccspk engine voicevox`。
+
+- 読む文を Google へ送る。要約・翻訳を入れていれば、送るのは要約・翻訳した後の文
+- 話者・辞書・読み間違いの自動の点検は効かない。読んだ文は点検の記録に溜まり、`voicevox` に戻したあとの Stop で点検する
+- 公開されている API ではないので、予告なく使えなくなることがある
+- 返ってくるのは mp3 で、`pw-play` にそのまま渡す（速さが 1.0 以外なら `ffmpeg` で速くした wav を渡す）。[`ccspk remote`](#311-ccspk-remote) と一緒に使うと、
+  合成は手元で行い、ssh 先の `pw-play` で鳴らす。ssh 先の `pw-play` も mp3 を読める必要がある（libsndfile 1.1.0 以上）
+- 断られた部分（記号だけの塊など）は飛ばし、後ろの文は読む
+- `ccspk engine google --speed 1.3` のように速くできる。声の高さは変わらない。速さを 1.0 以外にすると `ffmpeg` が要り、
+  無ければふつうの速さで読む。塊ごとに `ffmpeg` を起こすぶん、鳴り始めが少し遅れる（1 塊 35ms ほど）
+- `ccspk engine` で切り替えると、鳴らせない理由の記録（[1.5](#15-読み上げが止まったままのとき)）を消す
+
+```mermaid
+flowchart LR
+    PL["再生の子プロセス"] -- "200 字ずつ（HTTPS）" --> GT["Google 翻訳の TTS"]
+    GT -- "mp3" --> PL
+    PL -- "mp3（1.0 以外は ffmpeg で wav に）" --> PW["pw-play"]
+```
+
 ## 2. 読み上げの辞書
 
 返答の読み上げで読み間違える単語は、VOICEVOX のエンジンのユーザー辞書で読みを直す。
@@ -373,6 +395,7 @@ Claude Code の Stop・MessageDisplay・PreToolUse フックとして動く。�
   `ssh` が無ければ、理由をファイルに記録する。エンジンに接続できなければ、`ssh -fN` で接続を張って
   試し直し、それでも接続できなければ読み上げずに終わる（ssh 先が落ちているだけのこともあるので、記録しない）。
   張れなかったときは、1 分のあいだは張り直さずに終わる（フックが待たせないため。張るのは最長 5 秒待つ）
+- [`ccspk engine google`](#321-ccspk-engine) のときは、ssh 先を決めていてもいなくても、エンジンに接続できるかは見ない
 
 **終了ステータス**
 
@@ -1028,4 +1051,53 @@ JSON の辞書をエンジンに読み込む。同じ ID の単語は上書き�
 $ ccspk dict import backup.json
 読み込んだ
 書き出した: /home/user/.config/ccspk/user_dict.json
+```
+
+### 3.21 ccspk engine
+
+```
+ccspk engine [voicevox | google] [--speed 倍率]
+```
+
+**説明**
+
+合成の手段（[1.12](#112-google-翻訳の-tts-で鳴らす)）と読み上げの速さを決め、決めた後の手段と速さを表示する。引数が無ければ今の手段と速さを表示する。
+速さは手段ごとに覚える。手段を切り替えると、その手段で前に決めた速さで読む。
+次の読み上げから効き、フックと [`ccspk say`](#33-ccspk-say) が使う。読んでいる途中で変えても、その読み上げの手段は変わらない。
+`google` のあいだ、[`ccspk speaker`](#39-ccspk-speaker) と [`ccspk dict`](#313-ccspk-dict) は、読み上げに効かないことを標準エラー出力に出す
+（どちらも VOICEVOX エンジンへの操作はそのまま行う）。
+
+**引数**
+
+- `voicevox` — VOICEVOX エンジンで合成する（既定）
+- `google` — Google 翻訳の TTS で合成する
+
+**オプション**
+
+- `--speed 倍率` — 手段の速さを 0.5〜2.0 倍で決める（既定は 1.0）。手段を書けばその手段の、書かなければ今の手段の速さを決める。
+  声の高さは変わらない。VOICEVOX はエンジンの `speedScale` で、Google は `ffmpeg` の `atempo` で速さを変える。
+  `google` で 1.0 以外のとき `ffmpeg` が無ければ、ふつうの速さで読み、そのことを標準エラー出力に出す。
+  1.0 以外では速さを変える処理を通るぶん、鳴り始めが遅れる。Google は塊ごとに `ffmpeg` を起こすので 1 塊 35ms ほど、
+  VOICEVOX はエンジンへ渡す前に問い合わせの結果を書き換えるだけで、遅れはごくわずか。1.0 のときはどちらも通らない
+
+**終了ステータス**
+
+- `0` — 成功
+- `2` — 引数の誤り
+
+**ファイル**
+
+- `~/.config/ccspk/engine` — 決めた手段（`$XDG_CONFIG_HOME` があれば `$XDG_CONFIG_HOME/ccspk/engine`）。
+  無い・`google` でないときは `voicevox`
+- `~/.config/ccspk/voicevox-speed`・`google-speed` — 手段ごとの速さ。無い・0.5〜2.0 の数でないときは 1.0
+
+**例**
+
+```console
+$ ccspk engine
+voicevox 1.0
+$ ccspk engine google --speed 1.3
+google 1.3
+$ ccspk engine voicevox
+voicevox 1.0
 ```

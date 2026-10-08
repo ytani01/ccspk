@@ -1,4 +1,4 @@
-"""Stop / MessageDisplay / PreToolUse hook: Claude の返答を VOICEVOX で読み上げる。
+"""Stop / MessageDisplay / PreToolUse hook: Claude の返答を VOICEVOX（ccspk engine google なら Google 翻訳の TTS）で読み上げる。
 
 Stop では最後の返答を、MessageDisplay ではツールを呼ぶ前などの途中の文章を、
 PreToolUse（AskUserQuestion）では質問の文を読む。
@@ -6,7 +6,7 @@ PreToolUse（AskUserQuestion）では質問の文を読む。
 要約が入っていて（ccspk summary）、整えた文が LIMIT を超えるときは、再生の子プロセスが
 claude -p で要約してから読む。翻訳が入っていて（ccspk translate）、整えた文が英文なら、日本語に訳してから読む。
 再生中に次の返答が来たら、前の再生を止めてから読む。順番に読むモード（ccspk queue）なら、止めずに来た順に読む。
-pw-play が無い、エンジンに接続できない、PipeWire が動いていない、のどれかなら
+pw-play が無い、エンジンに接続できない（google のときは見ない）、PipeWire が動いていない、のどれかなら
 鳴らさずに終わり、理由を UNUSABLE に書いて覚える。ファイルがあるあいだは確かめもせずに終わる。
 ccspk remote で ssh 先を決めていれば、ssh 先の pw-play で鳴らす。エンジンにつながらなければ
 ssh のマスター接続を張って試し直し、それでもだめなら鳴らさずに終わる（UNUSABLE には覚えない）。
@@ -15,6 +15,7 @@ ssh のマスター接続を張って試し直し、それでもだめなら鳴�
 import fcntl
 import io
 import json
+import math
 import os
 import queue
 import re
@@ -37,11 +38,16 @@ from . import check
 from .mylog import getLogger
 from .user_dict import (
     DICT_FILE,
+    ENGINE_FILE,
     REMOTE_FILE,
+    SPEEDS,
     STATE,
+    google,
     pw_play,
     remote,
     speaker,
+    speed,
+    speed_file,
     write_config,
 )
 
@@ -52,6 +58,8 @@ EXTEND = 60
 ENDS = "。！？!?"  # 文末
 COMMAS = "、，"  # 読点。半角の「,」は 1,000 のような数字の中にも出るので入れない
 ENGINE = "http://127.0.0.1:50021"
+GOOGLE = "https://translate.google.com/translate_tts"
+GOOGLE_MAX = 200  # Google に 1 回で送れる字数。201 字で 400 が返った
 PLAY = "--play"  # 合成と再生を受け持つ子プロセスの目印
 MODULE = "ccspk.hook"  # 子プロセスは python -m でこのモジュールを起こす。ours() はこれで見分ける
 # 1・2 文目を短く切る区切り。読点・閉じ括弧・コロンの後ろ、開き括弧の前。
@@ -136,13 +144,14 @@ def engine_error():
 
 def unusable():
     """鳴らせない理由を返す。鳴らせるなら None。
-    remote() があれば、ssh があるかだけ見る（エンジンは reachable()、PipeWire は ssh 先の話なので見ない）。"""
+    remote() があれば、ssh があるかだけ見る（エンジンは reachable()、PipeWire は ssh 先の話なので見ない）。
+    google() なら、エンジンは見ない（remote() があっても reachable() を呼ばない）。"""
     player = "ssh" if remote() else "pw-play"
     if not shutil.which(player):
         return f"{player} が無い"
     if remote():
         return None
-    if e := engine_error():
+    if not google() and (e := engine_error()):
         return e
     # PIPEWIRE_REMOTE は [a,b] のような形も取り、解釈を合わせきれないので、あれば確かめない
     if os.environ.get("PIPEWIRE_REMOTE"):
@@ -552,8 +561,8 @@ def squeeze(chunk):
     )
 
 
-def synthesize(sentence, sid):
-    """1 文を話者 sid で合成して wav のバイト列を返す。"""
+def synthesize(sentence, sid, rate=1.0):
+    """1 文を話者 sid・速さ rate で合成して wav のバイト列を返す。"""
     query = urllib.request.urlopen(
         urllib.request.Request(
             f"{ENGINE}/audio_query?speaker={sid}&text=" + urllib.parse.quote(sentence),
@@ -563,6 +572,8 @@ def synthesize(sentence, sid):
         # その後ろに並ぶと 10 秒近く待つので、短くすると黙って諦めてしまう
         timeout=60,
     ).read()
+    if rate != 1.0:  # 1.0 なら JSON を読み直さず、そのまま渡す
+        query = json.dumps(json.loads(query) | {"speedScale": rate}).encode()
     return urllib.request.urlopen(
         urllib.request.Request(
             # 「？」「?」で終わる文に語尾を上げる「ァ」を足させない（「かぁ」と伸びて聞こえる）
@@ -574,18 +585,57 @@ def synthesize(sentence, sid):
     ).read()
 
 
+def google_parts(sentence):
+    """GOOGLE_MAX 字ずつに切る。切れ目は範囲の中の最後の読点か空白の後ろ、無ければ GOOGLE_MAX 字ちょうど。"""
+    parts = []
+    while len(sentence) > GOOGLE_MAX:
+        i = max(sentence.rfind(c, 0, GOOGLE_MAX) for c in COMMAS + " ") + 1 or GOOGLE_MAX
+        parts.append(sentence[:i])
+        sentence = sentence[i:]
+    return parts + [sentence]
+
+
+def google_tts(text):
+    """Google 翻訳の TTS で text（GOOGLE_MAX 字まで）を合成して mp3 のバイト列を返す。pw-play は mp3 もそのまま鳴らす。"""
+    q = urllib.parse.urlencode({"ie": "UTF-8", "client": "tw-ob", "tl": "ja", "q": text})
+    return urllib.request.urlopen(f"{GOOGLE}?{q}", timeout=10).read()
+
+
+def tempo(audio, rate):
+    """ffmpeg の atempo で、声の高さを変えずに rate 倍の速さにした wav を返す。1.0 か、ffmpeg が無い・失敗したときは audio のまま。"""
+    if rate == 1.0:
+        return audio
+    try:
+        return subprocess.run(
+            ["ffmpeg", "-v", "error", "-i", "pipe:0", "-filter:a", f"atempo={rate}", "-f", "wav", "pipe:1"],
+            input=audio, capture_output=True, check=True, timeout=10,
+        ).stdout
+    except (OSError, subprocess.SubprocessError):
+        return audio
+
+
 def play(text):
     """1 文目ができたらすぐ鳴らし、2 文目以降は鳴らしている間に合成する。"""
     wavs = queue.Queue()
     sid = speaker()  # 読んでいる途中で ccspk speaker を変えても、声は変えない
+    use_google = google()  # 合成の手段も同じ
     args = pw_play()  # 音量も同じ
+    rate = speed()  # 速さも同じ
 
     def produce():
         # エンジンが動いていない、応答が途中で切れた、など何で止まっても、
         # 鳴らす側が待ち続けないよう終わりの印は必ず入れる
         try:
             for s in chunks(text):
-                wavs.put(synthesize(s, sid))
+                if use_google:
+                    for p in google_parts(s):
+                        # 断られた部分（記号だけの塊など）は飛ばし、後ろの文は読む。つながらないときは止める
+                        try:
+                            wavs.put(tempo(google_tts(p), rate))
+                        except urllib.error.HTTPError:
+                            pass
+                else:
+                    wavs.put(synthesize(s, sid, rate))
         finally:
             wavs.put(None)
 
@@ -804,6 +854,19 @@ def demo():
     assert split_first("明日の会議は 12:30 からです。") == ["明日の会議は 12:30", "からです。"]
     assert split_first(a * 9 + "hasCell() を足した。")[0] == a * 9 + "hasCell()"
     assert chunks("見直しが終わったので、確かめてください。") == ["見直しが終わったので、", "確かめてください。"]
+    # Google へは GOOGLE_MAX 字ずつ。最後の読点か空白の後ろで切り、無ければ字数で切る
+    assert google_parts("短い。") == ["短い。"]
+    assert google_parts(a * 150 + "、" + a * 100) == [a * 150 + "、", a * 100]
+    assert google_parts(a * 450) == [a * 200, a * 200, a * 50]
+    assert google_parts(a * 199 + " " + a) == [a * 199 + " ", a]
+    # 速さ。1.0 なら ffmpeg を起こさず、ffmpeg が無い・読めない音ならそのまま返す（鳴らない音にしない）
+    assert tempo(b"x", 1.0) == b"x" and tempo(b"x", 1.3) == b"x"
+    if shutil.which("ffmpeg"):  # 1 秒の無音で、1.0 は同じもの、2.0 は半分ほどの長さになる
+        w = subprocess.run(
+            ["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "anullsrc=r=24000:cl=mono", "-t", "1", "-f", "wav", "pipe:1"],
+            capture_output=True, check=True,
+        ).stdout
+        assert tempo(w, 1.0) is w and 0.4 < len(tempo(w, 2.0)) / len(w) < 0.6
     assert chunks("直しました、確かめてください。次です。") == ["直しました、確かめてください。", "次です。"]
     # 切るのは 2 文目まで
     assert chunks("見直しが終わったので、確かめてください。二つ目の文ですが、ここも切る。三つ目の文ですが、ここは切らない。") == [
@@ -1088,7 +1151,7 @@ def main():
         except OSError:
             pass
         return
-    if remote() and not reachable():  # ssh 先が落ちているだけかもしれないので、覚えない
+    if remote() and not google() and not reachable():  # ssh 先が落ちているだけかもしれないので、覚えない
         return
     if (payload := read_payload(sys.stdin.buffer)) is None:
         return
@@ -1220,6 +1283,28 @@ def remote_(host, off):
     if host or off:
         UNUSABLE.unlink(missing_ok=True)  # 鳴らす先が変わったので、前に覚えた理由は当たらない
     print(remote() or "off")
+
+
+@click.command()
+@click.argument("name", required=False, type=click.Choice(["voicevox", "google"]))
+@click.option("--speed", "rate", type=click.FloatRange(*SPEEDS), help="読み上げの速さ（0.5〜2.0 倍）。手段ごとに覚える")
+def engine_(name, rate):
+    """合成の手段を VOICEVOX か Google 翻訳の TTS に決める。引数なしは今の手段と速さを表示する。次の読み上げから効く。
+
+    --speed は NAME の速さを、NAME を省くと今の手段の速さを決める（例: ccspk engine google --speed 1.3）。
+    google は読む文を Google へ送る。話者・辞書・読み間違いの点検は効かない。google の速さを変えるには ffmpeg が要る。
+    """
+    if rate is not None and math.isnan(rate):  # FloatRange は nan を通す
+        raise click.BadParameter("nan は速さにできない", param_hint="--speed")
+    if name:
+        write_config(ENGINE_FILE, name)
+        UNUSABLE.unlink(missing_ok=True)  # エンジンが止まって覚えた理由は、google では当たらない
+    current = "google" if google() else "voicevox"
+    if rate is not None:
+        write_config(speed_file(current), rate)
+    if current == "google" and speed() != 1.0 and not shutil.which("ffmpeg"):
+        click.echo("ffmpeg が無いので、google はふつうの速さで読む", err=True)
+    print(current, speed())
 
 
 def switch(path, state):

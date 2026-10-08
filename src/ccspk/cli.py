@@ -1,4 +1,4 @@
-"""ccspk のエントリポイント。サブコマンド hook・say・stop・status・summary・queue・translate・speaker・volume・remote・test・dict をまとめる。"""
+"""ccspk のエントリポイント。サブコマンド hook・say・stop・status・summary・queue・translate・speaker・engine・volume・remote・test・dict をまとめる。"""
 
 import click
 
@@ -7,7 +7,7 @@ from .check import demo as check_demo
 from .click_utils import click_common_opts
 from .hook import demo as hook_demo
 from .hook import main as hook
-from .hook import queue_, remote_, say, status, stop, summary, translate
+from .hook import engine_, queue_, remote_, say, status, stop, summary, translate
 from .mylog import getLogger, loggerInit
 from .user_dict import demo as dict_demo
 from .user_dict import dict_group, speaker_, volume_
@@ -18,7 +18,7 @@ _log = getLogger("main")
 @click.group(context_settings={"help_option_names": ["-h", "--help"]})
 @click_common_opts(__version__)
 def cli(ctx, debug):
-    """Claude Code の返答を VOICEVOX で読み上げる。"""
+    """Claude Code の返答を VOICEVOX か Google 翻訳の TTS で読み上げる。"""
     loggerInit(debug)
     _log.debug(f"debug={debug}")
 
@@ -39,6 +39,7 @@ cli.add_command(summary, name="summary")
 cli.add_command(queue_, name="queue")
 cli.add_command(translate, name="translate")
 cli.add_command(speaker_, name="speaker")
+cli.add_command(engine_, name="engine")
 cli.add_command(volume_, name="volume")
 cli.add_command(remote_, name="remote")
 cli.add_command(dict_group, name="dict")
