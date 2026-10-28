@@ -129,8 +129,9 @@ def speed(name=None):
 
 
 def ssh(host, script):
-    """host で script を sh に走らせる ssh の引数。パスワードを聞きに止まらないよう BatchMode にする。"""
-    return ["ssh", "-o", "BatchMode=yes", host, "sh", "-c", shlex.quote(script)]
+    """host で script を sh に走らせる ssh の引数。パスワードを聞きに止まらないよう BatchMode にし、
+    host が落ちていても長く待たないよう ConnectTimeout を付ける。"""
+    return ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=3", host, "sh", "-c", shlex.quote(script)]
 
 
 def watched(args):
@@ -342,7 +343,7 @@ def demo():
         REMOTE_FILE.write_text("\n")
         assert remote() is None
         write_config(REMOTE_FILE, "ytlenovo")
-        assert pw_play() == ["ssh", "-o", "BatchMode=yes", "ytlenovo", "sh", "-c", shlex.quote(watched(["pw-play", f"--volume={volume()}", "-"]))]
+        assert pw_play() == ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=3", "ytlenovo", "sh", "-c", shlex.quote(watched(["pw-play", f"--volume={volume()}", "-"]))]
     finally:
         shutil.rmtree(REMOTE_FILE.parent)
         REMOTE_FILE = saved

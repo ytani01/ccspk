@@ -8,12 +8,14 @@ claude -p で要約してから読む。翻訳が入っていて（ccspk transla
 再生中に次の返答が来たら、前の再生を止めてから読む。順番に読むモード（ccspk queue）なら、止めずに来た順に読む。
 pw-play が無い、エンジンに接続できない（google のときは見ない）、PipeWire が動いていない、のどれかなら
 鳴らさずに終わり、理由を UNUSABLE に書いて覚える。ファイルがあるあいだは確かめもせずに終わる。
-ccspk remote で ssh 先を決めていれば、ssh 先の pw-play で鳴らす。エンジンにつながらなければ
-ssh のマスター接続を張って試し直し、それでもだめなら鳴らさずに終わる（UNUSABLE には覚えない）。
+ccspk remote で ssh 先を決めていれば、ssh 先の pw-play で鳴らす。エンジンが 2 秒のうちに返事をしなければ
+（ポートにもつながらなければ ssh のマスター接続を張って試し直し）、それでもだめなら鳴らさずに終わる（UNUSABLE には覚えない）。
 """
 
 import fcntl
+import http.client
 import io
+import itertools
 import json
 import math
 import os
@@ -77,7 +79,7 @@ PIDFILE = BASE.with_suffix(".pid")  # 子プロセスの PID を 1 行に 1 つ�
 UNUSABLE = BASE.with_suffix(".unusable")
 # 最後に読んだ文。返答の最後の文章は MessageDisplay と Stop の両方から来るので、2 度読まない
 LAST = BASE.with_suffix(".last")
-# ssh 先へマスター接続を張れなかった時刻（mtime）。RETRY_AFTER 秒のうちは張り直さない（フックを待たせないため）
+# ssh 先のエンジンが返事をしなかった時刻（mtime）。RETRY_AFTER 秒のうちは確かめない（フックを待たせないため）
 DOWN = BASE.with_suffix(".down")
 RETRY_AFTER = 60
 LOCK = BASE.with_suffix(".lock")  # フックは並んで走るので、PARTS・LAST・PIDFILE を触るあいだは 1 つずつ通す（ccspk stop も取る）
@@ -88,6 +90,7 @@ PARTS_KEEP = 600  # そろわないまま残った分は、この秒数で消す
 # 読んでからこの秒数のうちに同じ文が来たら読まない。MessageDisplay と Stop は 0.01 秒差で来た。
 # 長くすると、続けて同じ返答（「はい。」など）が来たときに黙ってしまう
 SAME_WITHIN = 5
+TEAM_LINES = 20  # teammate の判定で transcript の先頭から読む行数（teamName は実測で 4〜5 行目）
 # あれば長い返答を要約して読む（ccspk summary on で作る）。環境変数 CCSPK_SUMMARY（1 か 0）が優先する
 SUMMARY = DICT_FILE.parent / "summary"
 SUMMARIZE = "--summarize"  # PLAY の後ろに付けると、子プロセスが要約してから読む
@@ -166,16 +169,40 @@ def unusable():
     return None
 
 
+def answers():
+    """エンジンが /version に 2 秒のうちに返事をするか。ssh 先が落ちていても手元の LocalForward はつなぎに応じるので、
+    engine_error() ではなく返事で見る。合成中でも /version は数 ms で返る。"""
+    try:
+        urllib.request.urlopen(f"{ENGINE}/version", timeout=2).close()
+    except (OSError, http.client.HTTPException):
+        return False
+    return True
+
+
 def reachable():
-    """ssh 先のエンジンにつながるか。つながらなければ、LocalForward を張るマスター接続を張って試し直す。
-    張れなかったら DOWN に覚え、RETRY_AFTER 秒のうちは張り直さずに False を返す。"""
-    if engine_error() is None:
-        return True
+    """ssh 先のエンジンが返事をするか。ポートにもつながらなければ、LocalForward を張るマスター接続を張って試し直す
+    （つながるなら転送はもうあるので張らない。ControlMaster が無いと、張るたびに ssh が裏に残る）。
+    だめなら DOWN に覚え、RETRY_AFTER 秒のうちは確かめずに False を返す（戻っても最長 RETRY_AFTER 秒は読まない）。"""
     try:
         if time.time() - DOWN.stat().st_mtime < RETRY_AFTER:
             return False
     except OSError:
         pass
+    if answers():
+        return True
+    if engine_error() is None:
+        ok = False
+    else:
+        ok = start_master()
+    try:
+        DOWN.unlink(missing_ok=True) if ok else DOWN.touch()
+    except OSError:
+        pass
+    return ok
+
+
+def start_master():
+    """ssh 先へマスター接続を張り（最長 5 秒）、エンジンが返事をするようになったか。"""
     try:
         subprocess.run(
             ["ssh", "-fN", "-o", "BatchMode=yes", "-o", "ConnectTimeout=3", remote()],
@@ -186,12 +213,7 @@ def reachable():
         )
     except (OSError, subprocess.SubprocessError):
         pass
-    ok = engine_error() is None
-    try:
-        DOWN.unlink(missing_ok=True) if ok else DOWN.touch()
-    except OSError:
-        pass
-    return ok
+    return answers()
 
 
 def to_speech(text):
@@ -335,6 +357,17 @@ def read_payload(stream):
     except (ValueError, OSError):  # JSONDecodeError・UnicodeDecodeError は ValueError
         return None
     return payload if isinstance(payload, dict) else None
+
+
+def teammate(path):
+    """transcript の先頭の TEAM_LINES 行に "teamName" があれば teammate（Agent ツールに name を付けて
+    起動した担当）。teammate には agent_id が付かず、終わりも Stop で届くので、これで見分ける。
+    path が無い・読めないときは False（読み上げを続ける）。"""
+    try:
+        with open(path, encoding="utf-8", errors="replace") as f:
+            return any('"teamName"' in line for line in itertools.islice(f, TEAM_LINES))
+    except (OSError, TypeError):
+        return False
 
 
 def clip(text):
@@ -1137,6 +1170,63 @@ def demo():
             k.wait()
         shutil.rmtree(tmp)
         PIDFILE = saved
+
+    # teammate()。先頭の TEAM_LINES 行に "teamName" があれば teammate。無い・読めない・path が無いときは違う
+    tmp = Path(tempfile.mkdtemp())
+    try:
+        mine, mate = tmp / "main.jsonl", tmp / "mate.jsonl"
+        mine.write_text('{"type":"user"}\n' * (TEAM_LINES + 5) + '{"teamName":"x"}\n')  # 範囲の外は見ない
+        mate.write_text('{"type":"user"}\n' * 3 + '{"type":"x","teamName":"t"}\n' + '{"type":"user"}\n')
+        assert teammate(str(mate)) and not teammate(str(mine))
+        assert not teammate(str(tmp / "none.jsonl")) and not teammate(None) and not teammate(str(tmp))
+    finally:
+        shutil.rmtree(tmp)
+
+    # reachable()。つながるが返事をしないエンジン（ssh 先が落ちて LocalForward だけ残る）は 2 秒ほどで諦め、DOWN に覚える
+    global ENGINE, DOWN
+    saved = ENGINE, DOWN
+    tmp = Path(tempfile.mkdtemp())
+    DOWN = tmp / "ccspk.down"
+    mute = socket.create_server(("127.0.0.1", 0))  # accept しないが、つなぎには応じる
+    sshs = []
+    try:
+        ENGINE = f"http://127.0.0.1:{mute.getsockname()[1]}"
+        with mock.patch.object(subprocess, "run", lambda args, **kw: sshs.append(args)):
+            t = time.monotonic()
+            assert not reachable() and DOWN.exists() and sshs == []  # 転送はあるので張り直さない
+            assert time.monotonic() - t < 3
+            t = time.monotonic()
+            assert not reachable() and sshs == [] and time.monotonic() - t < 0.1  # 覚えている間は確かめない
+            DOWN.touch()
+            os.utime(DOWN, (0, 0))  # RETRY_AFTER を過ぎた
+            ENGINE = "http://127.0.0.1:1"  # 接続を拒まれたら待たない
+            t = time.monotonic()
+            assert not reachable() and len(sshs) == 1 and time.monotonic() - t < 1
+    finally:
+        mute.close()
+        shutil.rmtree(tmp)
+        ENGINE, DOWN = saved
+
+    # remote。off も --off も ssh 先を消す。ホスト名にはしない
+    global REMOTE_FILE, UNUSABLE
+    from click.testing import CliRunner  # demo でだけ使う
+
+    from . import user_dict
+
+    saved = REMOTE_FILE, UNUSABLE, user_dict.REMOTE_FILE
+    tmp = Path(tempfile.mkdtemp())
+    REMOTE_FILE = user_dict.REMOTE_FILE = tmp / "remote"
+    UNUSABLE = tmp / "ccspk.unusable"
+    try:
+        for arg in ("off", "--off", "OFf"):
+            assert CliRunner().invoke(remote_, ["ytlenovo"]).output == "ytlenovo\n" and REMOTE_FILE.read_text() == "ytlenovo\n"
+            UNUSABLE.write_text("x\n")
+            r = CliRunner().invoke(remote_, [arg])
+            assert r.exit_code == 0 and r.output == "off\n" and not REMOTE_FILE.exists() and not UNUSABLE.exists(), (arg, r.output)
+        assert CliRunner().invoke(remote_, []).output == "off\n" and not REMOTE_FILE.exists()
+    finally:
+        REMOTE_FILE, UNUSABLE, user_dict.REMOTE_FILE = saved
+        shutil.rmtree(tmp)
     print("ok")
 
 
@@ -1160,6 +1250,8 @@ def main():
     ask = event == "PreToolUse"
     _log.debug(f"event={event}")
     if (display or ask) and payload.get("agent_id"):
+        return
+    if teammate(payload.get("transcript_path")):
         return
     try:
         lock = open(LOCK, "w")
@@ -1266,12 +1358,16 @@ def translate(state):
 
 @click.command()
 @click.argument("host", required=False)
-@click.option("--off", is_flag=True, help="手元の pw-play で鳴らす")
+@click.option("--off", is_flag=True, help="手元の pw-play で鳴らす（HOST に off と書いても同じ。大文字小文字は区別しない）")
 def remote_(host, off):
     """読み上げを ssh 先の HOST の pw-play で鳴らす（例: ytlenovo）。引数なしは今の ssh 先を表示する。次の読み上げから効く。
 
+    HOST に off（OFF・Off も同じ）を渡すと --off と同じで、手元の pw-play で鳴らす（off という名前のホストには使えない）。
+
     エンジンへは ~/.ssh/config の LocalForward でつなぎ、辞書は HOST の ~/.config/ccspk/user_dict.json へ書き出す。
     """
+    if host and host.lower() == "off":
+        host, off = None, True
     if host and off:
         raise click.UsageError("HOST と --off は一緒に使えない")
     if host is not None:

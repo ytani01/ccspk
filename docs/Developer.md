@@ -68,6 +68,8 @@
   空の `Stop` では、前の再生を止める
 - サブエージェントの報告や質問では鳴らない（`SubagentStop` は登録せず、`MessageDisplay` と
   `PreToolUse` も `agent_id` があれば読まない）
+- teammate（Agent ツールに `name` を付けて起動した担当）の返答でも鳴らない。teammate には `agent_id` が付かず、
+  終わりも `Stop` で届くので、`transcript_path` の先頭の 20 行に `"teamName"` があるかで見分け、どのイベントでも読まない
 - 鳴らせないとき（条件は下の [「3.4 鳴らせるかを確かめる」](#34-鳴らせるかを確かめる)）は、鳴らさずに終わり、
   使えないことを覚えて、次からは確かめもせずに終わる。
   戻し方は [UsersGuide.md](UsersGuide.md#15-読み上げが止まったままのとき) にある
@@ -85,7 +87,9 @@ MessageDisplay フックとして、`AskUserQuestion` を呼ぶ直前に PreTool
 `message_id`・`index`・`delta`・`final`。MessageDisplay は 1 つの文章を `index` ごとの分
 （`delta`）に分けて渡し、最後の分に `final: true` が付く。フックは並んで走り、後ろの分が
 先に届くこともある。PreToolUse なら `tool_name` と `tool_input.questions[].question`。
-`agent_id` があるとき（サブエージェント）は読まない。
+`agent_id` があるとき（サブエージェント）は読まない。teammate には `agent_id` が付かないので、
+`transcript_path` の先頭の 20 行に `"teamName"` があるか（`teammate()`）で見分け、どのイベントでも読まない。
+`transcript_path` が無い・読めないときは、teammate でないものとして読み上げを続ける。
 
 `hook.py` にはサブコマンドが 8 つある。
 
@@ -107,8 +111,8 @@ MessageDisplay フックとして、`AskUserQuestion` を呼ぶ直前に PreTool
 1. 環境変数 `CCSPK_SPEAK` が `1` か
 2. 使えないと覚えたファイル（`UNUSABLE`）が無いか。あれば確かめもせずに終わる
 3. `unusable()` で鳴らせるかを確かめる。だめなら理由を `UNUSABLE` に書いて終わる。
-   `remote()` があり `google()` が偽なら、続けて `reachable()` でエンジンにつながるかを確かめ、だめなら `UNUSABLE` に書かずに終わる
-4. 標準入力の JSON を読む。MessageDisplay・PreToolUse で `agent_id` があれば終わる
+   `remote()` があり `google()` が偽なら、続けて `reachable()` でエンジンが返事をするかを確かめ、だめなら `UNUSABLE` に書かずに終わる
+4. 標準入力の JSON を読む。MessageDisplay・PreToolUse で `agent_id` があるか、`teammate()` が真なら終わる
 5. `LOCK` を取る。ここから先は、同時に来たフックを 1 つずつ通す
 6. MessageDisplay なら、`assemble()` で分を `PARTS` に置く。最後の分とそれより前の分が
    そろっていなければ終わる。そろったらつなぎ、置いた分を消す。`PARTS_KEEP` 秒より古い分もここで消す。
@@ -142,7 +146,7 @@ flowchart TD
     R -- はい --> RR{"reachable()"}
     RR -- だめ --> E
     RR -- つながる --> D{"4. JSON を読む"}
-    D -- "読めない・MessageDisplay か PreToolUse で agent_id がある" --> E
+    D -- "読めない・MessageDisplay か PreToolUse で agent_id がある・teammate" --> E
     D -- 読めた --> L["5. LOCK を取る"]
     L --> F{"6. イベント"}
     F -- MessageDisplay --> F1{"assemble() で分がそろった"}
@@ -293,16 +297,19 @@ Google では `tempo()` が mp3 を `ffmpeg` の `atempo` に標準入出力で�
 使えるときは、3 つ合わせて 1 ms ほどで終わる。
 
 `remote()`（`ccspk remote` で決めた ssh 先）があるときは、`ssh` が `PATH` にあるかだけを見る。エンジンは
-`main()` が `reachable()` で確かめる。接続できなければ `ssh -fN -o BatchMode=yes -o ConnectTimeout=3 <ホスト>` で
+`main()` が `reachable()` で確かめる。ssh 先のマシンが落ちていても手元の `LocalForward` はつなぎに応じるので、
+ポートにつながるかではなく、エンジンの `/version` が 2 秒のうちに返事をするかで見る（合成中でも数 ms で返る）。
+返事が無く、ポートにもつながらなければ `ssh -fN -o BatchMode=yes -o ConnectTimeout=3 <ホスト>` で
 （最長 5 秒待って）マスター接続を張り（`~/.ssh/config` の `LocalForward` が転送を張る。すでにマスター接続があれば、それが転送を張る）、
-もう一度だけ確かめる。ssh 先が一時的に落ちているだけのこともあるので、だめでも `UNUSABLE` には書かない。
-代わりに `DOWN`（`ccspk.down`）に触れ、その mtime から `RETRY_AFTER`（60）秒のうちは張り直さずに終わる。
-フックは Claude Code を待たせるので、落ちているあいだ毎回待たないため。つながったら `DOWN` を消す。
+もう一度だけ確かめる。ポートにつながるなら転送はもうあるので張らない（`ControlMaster` が無いと、張るたびに `ssh` が裏に残る）。ssh 先が一時的に落ちているだけのこともあるので、だめでも `UNUSABLE` には書かない。
+代わりに `DOWN`（`ccspk.down`）に触れ、その mtime から `RETRY_AFTER`（60）秒のうちは確かめずに終わる。
+フックは Claude Code を待たせるので、落ちているあいだ毎回待たないため。そのため、エンジンが戻っても最長 60 秒は読まない。
+つながったら `DOWN` を消す。ssh 先で鳴らす `ssh` にも `ConnectTimeout=3` を付けてある。
 PipeWire は ssh 先の話なので見ない。
 
 #### 3.4.1 ssh 先で鳴らす
 
-`pw_play()` は、`remote()` があれば `ssh -o BatchMode=yes <ホスト> sh -c '<watched() のスクリプト>'` を返す。
+`pw_play()` は、`remote()` があれば `ssh -o BatchMode=yes -o ConnectTimeout=3 <ホスト> sh -c '<watched() のスクリプト>'` を返す。
 ssh のクライアントを止めても（`SIGTERM` でも `SIGKILL` でも）、ssh 先の `pw-play` は鳴り続ける（2026-10-05 に実測）。
 `pw-play` は標準入力の wav を読み終えていて、接続が切れたことに気づかないため。そこで `watched()` は、`pw-play` の横で
 見張りを走らせる。見張りは 0.1 秒ごとに標準出力（ssh の接続）へ改行を書き、書けなくなったら `kill 0` で
@@ -341,7 +348,7 @@ sequenceDiagram
 | `UNUSABLE` | `ccspk.unusable`（`/tmp/ccspk-<uid>.unusable`） | 鳴らせない理由 |
 | `LAST` | `ccspk.last`（`/tmp/ccspk-<uid>.last`） | 最後に読んだ文（整えた後） |
 | `LOCK` | `ccspk.lock`（`/tmp/ccspk-<uid>.lock`） | 同時に来たフックを 1 つずつ通すためのロック。`ccspk stop` も PIDFILE を触る前に取る |
-| `DOWN` | `ccspk.down`（`/tmp/ccspk-<uid>.down`） | ssh 先へマスター接続を張れなかった時刻（mtime）。`RETRY_AFTER` 秒のうちは張り直さない |
+| `DOWN` | `ccspk.down`（`/tmp/ccspk-<uid>.down`） | ssh 先のエンジンが返事をしなかった時刻（mtime）。`RETRY_AFTER` 秒のうちは確かめない |
 | `PARTS` | `ccspk.parts/`（`/tmp/ccspk-<uid>.parts/`） | MessageDisplay の分。`<message_id>.<index>` と、最後の分の番号を書いた `<message_id>.final` |
 
 ### 3.6 整形と分割
@@ -423,7 +430,7 @@ sudachipy は読まない（最初の音を遅らせない）。
   `start_new_session=True`・入出力は捨てる・`cwd` は `STATE` で起こす
 
 `CCSPK_SPEAK` が `1` でない、`UNUSABLE` がある、`unusable()` がだめ、標準入力の JSON が読めないかオブジェクトでない、
-`MessageDisplay`・`PreToolUse` に `agent_id` がある（サブエージェント）、で早く返るときは、どちらも呼ばない。
+`MessageDisplay`・`PreToolUse` に `agent_id` がある（サブエージェント）、teammate、で早く返るときは、どちらも呼ばない。
 状態のファイルの読み書きの `OSError` は捨て、フックを落とさない。
 
 点検（`main()` → `check()`）の流れ:
@@ -532,8 +539,8 @@ check の `demo()` は、単語の切り出し（`extract`）、`claude` の返�
 uv run ccspk test   # hook・dict・check の demo() を全部
 ```
 
-整形や分割を変えたら、`demo()` に例を足す。`unusable()`・`reachable()` と `main()` の分岐は
-環境に依るので、`demo()` では確かめていない。下の手順で手で確かめる。
+整形や分割を変えたら、`demo()` に例を足す。`unusable()` と `main()` の分岐は
+環境に依るので、`demo()` では確かめていない（`reachable()` は、返事をしない偽のエンジンと接続を拒まれる場合だけ確かめている）。下の手順で手で確かめる。
 
 ### 4.2 フックを手で動かす
 
